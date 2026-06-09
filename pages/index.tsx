@@ -1,8 +1,11 @@
 import { PortalShell } from "@/components/PortalShell";
 import { games } from "@/components/portalData";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import Head from "next/head";
+import { useRouter } from "next/router";
 import type { CSSProperties } from "react";
 import { useState } from "react";
+import { useAccount } from "wagmi";
 
 type CardStyle = CSSProperties & {
   "--thumb": string;
@@ -10,8 +13,27 @@ type CardStyle = CSSProperties & {
 };
 
 export default function LibraryPage() {
+  const router = useRouter();
+  const { isConnected } = useAccount();
+  const { openConnectModal } = useConnectModal();
   const [selectedIndex, setSelectedIndex] = useState(0);
   const selectedGame = games[selectedIndex];
+
+  const playable = Boolean(selectedGame.route);
+  const playLabel = !playable
+    ? "Coming soon"
+    : isConnected
+      ? "Play now"
+      : "Connect to play";
+
+  const handlePlay = () => {
+    if (!playable || !selectedGame.route) return;
+    if (!isConnected) {
+      openConnectModal?.();
+      return;
+    }
+    router.push(selectedGame.route);
+  };
 
   return (
     <>
@@ -39,11 +61,16 @@ export default function LibraryPage() {
           </div>
 
           <div className="actions">
-            <button type="button" className="play">
+            <button
+              type="button"
+              className="play"
+              onClick={handlePlay}
+              disabled={!playable}
+            >
               <svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
                 <path d="M8 5.5 18 12 8 18.5V5.5Z" fill="currentColor" />
               </svg>
-              Play now
+              {playLabel}
             </button>
             <button type="button" className="ghost">
               Add to library
@@ -192,9 +219,16 @@ export default function LibraryPage() {
           box-shadow: 0 12px 30px rgba(0, 0, 0, 0.4);
         }
 
-        .play:hover {
+        .play:hover:not(:disabled) {
           transform: translateY(-2px);
           box-shadow: 0 16px 38px color-mix(in srgb, var(--accent), transparent 55%);
+        }
+
+        .play:disabled {
+          cursor: not-allowed;
+          color: var(--text-dim);
+          background: var(--surface-strong);
+          box-shadow: inset 0 0 0 1px var(--border);
         }
 
         .ghost {

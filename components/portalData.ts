@@ -11,9 +11,26 @@ export type Game = {
   accent: string;
   players: string;
   inventory: string[];
+  /** Set on playable titles — the route launched by the Play button. */
+  route?: string;
 };
 
 export const games: Game[] = [
+  {
+    id: "whats-67",
+    name: "What's 67?",
+    category: "Multiplayer Party",
+    studio: "Monad Arcade",
+    tagline: "Two players, one camera each. Do the 6-7 seesaw fastest in 20 seconds.",
+    cover:
+      "radial-gradient(135% 120% at 50% 8%, rgba(192,132,252,0.5) 0%, rgba(34,211,238,0.14) 42%, transparent 64%), linear-gradient(160deg, #0b0816 0%, #2a1a55 38%, #5b3aa6 68%, #0a0812 100%)",
+    thumbnail:
+      "radial-gradient(120% 95% at 50% 16%, rgba(192,132,252,0.6) 0%, transparent 56%), linear-gradient(150deg, #2a1a55 0%, #6d3ab0 70%, #0a0812 100%)",
+    accent: "#c084fc",
+    players: "67",
+    inventory: ["67 Badge", "Combo Trail", "Winner Crown"],
+    route: "/sixseven",
+  },
   {
     id: "skyward-realms",
     name: "Skyward Realms",

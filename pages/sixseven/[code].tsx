@@ -427,7 +427,7 @@ export default function SixSevenRoom() {
   return (
     <>
       <Head>
-        <title>{`six seven · ${code}`}</title>
+        <title>{`What's 67? · ${code}`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6">
@@ -440,7 +440,7 @@ export default function SixSevenRoom() {
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                   <span className="bg-gradient-to-r from-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">
-                    six seven
+                    What&apos;s 67?
                   </span>
                 </h1>
                 <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2 mt-0.5">
