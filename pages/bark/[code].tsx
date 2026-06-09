@@ -3,6 +3,14 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { formatEther, parseEther } from "viem";
+import {
+  useAccount,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
+import { BARK_VAULT_ADDRESS, VAULT_ABI, matchIdFromCode } from "@/lib/contracts";
 
 type Role = "host" | "guest";
 type GameStatus = "waiting" | "running" | "finished";
@@ -18,7 +26,6 @@ type ServerState = {
   peers: { host: PeerStatus; guest: PeerStatus };
 };
 
-const BARK_SERVER_PORT = 3001;
 const BARK_WS_URL_OVERRIDE = process.env.NEXT_PUBLIC_BARK_WS_URL ?? "";
 const AMP_THRESHOLD = 0.16;
 const HYSTERESIS_LOW = 0.045;
@@ -76,6 +83,42 @@ export default function BarkRoom() {
   const [myBarkAt, setMyBarkAt] = useState(0);
   const [oppBarkAt, setOppBarkAt] = useState(0);
 
+  // ---- On-chain wager (bark vault escrow, no NFT) ----
+  const { isConnected } = useAccount();
+  const matchId = code ? matchIdFromCode(code) : undefined;
+  const { data: matchRaw, refetch: refetchMatch } = useReadContract({
+    address: BARK_VAULT_ADDRESS,
+    abi: VAULT_ABI,
+    functionName: "getMatch",
+    args: matchId ? [matchId] : undefined,
+    query: { enabled: Boolean(matchId), refetchInterval: 3000 },
+  });
+  const { writeContractAsync, isPending: writePending } = useWriteContract();
+  const [wager, setWager] = useState("0.1");
+  const [pendingTx, setPendingTx] = useState<`0x${string}` | undefined>(undefined);
+  const { isLoading: txMining, isSuccess: txDone } = useWaitForTransactionReceipt({
+    hash: pendingTx,
+    query: { enabled: Boolean(pendingTx) },
+  });
+
+  useEffect(() => {
+    if (txDone) {
+      refetchMatch();
+      setPendingTx(undefined);
+    }
+  }, [txDone, refetchMatch]);
+
+  const match = matchRaw as
+    | readonly [`0x${string}`, `0x${string}`, bigint, bigint, number]
+    | undefined;
+  const matchStatus = Number(match?.[4] ?? 0); // 0 None 1 Open 2 Funded 3 Resolved 4 Cancelled
+  const hostStake = match?.[2] ?? 0n;
+  const guestStake = match?.[3] ?? 0n;
+  const pot = hostStake + guestStake;
+  const bothFunded = matchStatus === 2;
+  const iStaked = role === "host" ? matchStatus >= 1 : matchStatus >= 2;
+  const txBusy = writePending || txMining;
+
   useEffect(() => {
     runningRef.current = server?.status === "running";
   }, [server?.status]);
@@ -108,7 +151,7 @@ export default function BarkRoom() {
       const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
       const url = BARK_WS_URL_OVERRIDE
         ? `${BARK_WS_URL_OVERRIDE.replace(/\/$/, "")}${params}`
-        : `${proto}//${window.location.hostname}:${BARK_SERVER_PORT}/ws${params}`;
+        : `${proto}//${window.location.host}/api/bark${params}`;
       setConn(attempt === 0 ? "connecting" : "reconnecting");
 
       ws = new WebSocket(url);
@@ -268,6 +311,44 @@ export default function BarkRoom() {
     lastMyScoreRef.current = myNow;
   }, [server, role, myBarkAt]);
 
+  const lockWager = async () => {
+    if (!matchId || !isConnected || !role) return;
+    let value: bigint;
+    try {
+      value = parseEther(wager || "0");
+    } catch {
+      return;
+    }
+    if (value <= 0n) return;
+    try {
+      const hash = await writeContractAsync({
+        address: BARK_VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: role === "host" ? "createMatch" : "joinMatch",
+        args: [matchId],
+        value,
+      });
+      setPendingTx(hash);
+    } catch {
+      /* user rejected or tx reverted */
+    }
+  };
+
+  const cancelWager = async () => {
+    if (!matchId) return;
+    try {
+      const hash = await writeContractAsync({
+        address: BARK_VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "cancel",
+        args: [matchId],
+      });
+      setPendingTx(hash);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const sendStart = () => {
     if (wsRef.current?.readyState !== 1) return;
     wsRef.current.send(JSON.stringify({ type: "start" }));
@@ -387,7 +468,10 @@ export default function BarkRoom() {
               {role === "host" && gameStatus !== "running" && (
                 <button
                   onClick={sendStart}
-                  disabled={!opponentReady || audio !== "ready" || conn !== "online"}
+                  disabled={
+                    !opponentReady || audio !== "ready" || conn !== "online" || !bothFunded
+                  }
+                  title={!bothFunded ? "Both players must lock a wager first" : undefined}
                   className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-black uppercase tracking-wider text-amber-950"
                 >
                   {gameStatus === "finished" ? "Again" : "Start"}
@@ -439,6 +523,79 @@ export default function BarkRoom() {
               </div>
             </div>
           </div>
+
+          {matchStatus !== 3 && gameStatus !== "running" && (
+            <div className="mb-3 p-4 bg-amber-950/50 border border-amber-700/40 rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs uppercase tracking-widest text-amber-200/70">
+                  Wager · winner takes all
+                </div>
+                {bothFunded && (
+                  <div className="text-emerald-300 text-sm font-bold font-mono">
+                    Pot {formatEther(pot)} MON
+                  </div>
+                )}
+              </div>
+
+              {!isConnected ? (
+                <div className="text-sm text-amber-200/70">
+                  Connect your wallet to place a wager.
+                </div>
+              ) : !iStaked ? (
+                role === "guest" && matchStatus === 0 ? (
+                  <div className="text-sm text-amber-200/70">
+                    Waiting for the host to set the stake…
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={wager}
+                        onChange={(e) => setWager(e.target.value)}
+                        className="w-full px-4 py-3 bg-amber-950/70 border border-amber-700/50 rounded-lg font-mono text-lg pr-16 focus:outline-none focus:border-amber-400"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-200/60 text-sm font-mono">
+                        MON
+                      </span>
+                    </div>
+                    <button
+                      onClick={lockWager}
+                      disabled={txBusy}
+                      className="px-5 py-3 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-black uppercase tracking-wider text-amber-950 whitespace-nowrap"
+                    >
+                      {txBusy ? "Locking…" : role === "host" ? "Stake & host" : "Stake & join"}
+                    </button>
+                  </div>
+                )
+              ) : !bothFunded ? (
+                <div className="text-sm text-amber-100/90">
+                  You staked{" "}
+                  <span className="font-mono text-amber-50">
+                    {formatEther(role === "host" ? hostStake : guestStake)} MON
+                  </span>
+                  . Waiting for your opponent to match…
+                  {role === "host" && matchStatus === 1 && (
+                    <button
+                      onClick={cancelWager}
+                      disabled={txBusy}
+                      className="ml-3 text-amber-200/70 underline hover:text-amber-100 disabled:opacity-40"
+                    >
+                      cancel &amp; refund
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-amber-100/90">
+                  Both wagers locked —{" "}
+                  <span className="font-mono text-amber-50">{formatEther(pot)} MON</span> pot.{" "}
+                  {role === "host" ? "Hit Start when ready." : "Waiting for host to start."}
+                </div>
+              )}
+            </div>
+          )}
 
           {fatalError && (
             <div className="mb-3 p-3 bg-red-950/60 border border-red-900 rounded-lg text-sm">
@@ -540,6 +697,21 @@ export default function BarkRoom() {
                     <div className="font-mono text-amber-200/80">
                       {myScore} – {oppScore}
                     </div>
+                    {pot > 0n && (
+                      <div className="mt-2 text-sm">
+                        {matchStatus === 3 ? (
+                          tied ? (
+                            <span className="text-emerald-300">Tie — stakes refunded.</span>
+                          ) : (
+                            <span className="text-emerald-300">
+                              Pot {formatEther(pot)} MON paid out 🏆
+                            </span>
+                          )
+                        ) : (
+                          <span className="text-amber-200">Settling on-chain…</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

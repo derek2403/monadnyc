@@ -93,10 +93,14 @@ contract SixSevenVault {
         uint256 pot = uint256(m.hostStake) + uint256(m.guestStake);
         _send(winner, pot);
 
+        // Trophy is optional: a vault deployed with nft == address(0) (e.g. the
+        // bark game) skips minting entirely so resolve can't revert on it.
         uint256 tokenId = 0;
-        try nft.mint(winner) returns (uint256 t) {
-            tokenId = t;
-        } catch {}
+        if (address(nft) != address(0)) {
+            try nft.mint(winner) returns (uint256 t) {
+                tokenId = t;
+            } catch {}
+        }
 
         emit MatchResolved(id, winner, pot, tokenId);
     }

@@ -2,8 +2,9 @@
 import { keccak256, toBytes } from "viem";
 
 export const MONAD_CHAIN_ID = 10143;
-export const NFT_ADDRESS = "0x356ED74eE51e4aa5f1Ce9B51329fecEF728621bc" as const;
-export const VAULT_ADDRESS = "0x4BdFc8a1D09D55E4e2D50F52052e6c4B6932cCfB" as const;
+export const NFT_ADDRESS = "0xF2502608F62029dE052B7f236D38Ee30B5ACE00C" as const;
+export const VAULT_ADDRESS = "0xf2A8094B78ebd607086F2fCd6AeBecF62BbE01f0" as const;
+export const BARK_VAULT_ADDRESS = "0xa129B72362b5F44631fBd4766AA684561AA2455D" as const;
 
 /** Match id derived from a room code, shared by client and server. */
 export const matchIdFromCode = (code: string) =>

@@ -56,7 +56,14 @@ async function main() {
   // 3. Authorize vault to mint trophies
   const tx = await nft.setMinter(vaultAddress);
   await tx.wait();
-  console.log("Vault set as NFT minter\n");
+  console.log("Vault set as NFT minter");
+
+  // 4. Bark vault — same escrow, no trophy. nft = address(0) makes resolve()'s
+  //    try/catch mint a no-op, so the winner just takes the pot.
+  const barkVault = await Vault.deploy(hre.ethers.ZeroAddress);
+  await barkVault.waitForDeployment();
+  const barkVaultAddress = await barkVault.getAddress();
+  console.log("BarkVault:     ", barkVaultAddress, "(no NFT)\n");
 
   // Write config for the app + server
   const nftAbi = (await hre.artifacts.readArtifact("SixSevenMaster")).abi;
@@ -69,6 +76,7 @@ async function main() {
     chainId,
     nft: nftAddress,
     vault: vaultAddress,
+    barkVault: barkVaultAddress,
     deployer: deployer.address,
     nftAbi,
     vaultAbi,
@@ -86,6 +94,7 @@ import { keccak256, toBytes } from "viem";
 export const MONAD_CHAIN_ID = ${chainId};
 export const NFT_ADDRESS = "${nftAddress}" as const;
 export const VAULT_ADDRESS = "${vaultAddress}" as const;
+export const BARK_VAULT_ADDRESS = "${barkVaultAddress}" as const;
 
 /** Match id derived from a room code, shared by client and server. */
 export const matchIdFromCode = (code: string) =>

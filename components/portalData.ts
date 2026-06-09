@@ -32,6 +32,21 @@ export const games: Game[] = [
     route: "/sixseven",
   },
   {
+    id: "bark-battle",
+    name: "Bark Battle",
+    category: "Multiplayer Party",
+    studio: "Monad Arcade",
+    tagline: "Two players, 20 seconds, loudest barks win. Stake MON — winner takes the pot.",
+    cover:
+      "radial-gradient(135% 120% at 50% 8%, rgba(251,191,36,0.5) 0%, rgba(249,115,22,0.14) 42%, transparent 64%), linear-gradient(160deg, #1a1206 0%, #5a3410 38%, #b45309 68%, #120a04 100%)",
+    thumbnail:
+      "radial-gradient(120% 95% at 50% 16%, rgba(251,191,36,0.6) 0%, transparent 56%), linear-gradient(150deg, #5a3410 0%, #b45309 70%, #120a04 100%)",
+    accent: "#fbbf24",
+    players: "20",
+    inventory: ["Golden Collar", "Loud Trophy", "Top Dog Tag"],
+    route: "/bark",
+  },
+  {
     id: "skyward-realms",
     name: "Skyward Realms",
     category: "Open World Adventure",
