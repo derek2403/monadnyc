@@ -32,7 +32,8 @@ const HYSTERESIS_LOW = 0.045;
 const FREQ_MIN = 100;
 const FREQ_MAX = 4000;
 const COOLDOWN_MS = 220;
-const BARK_FX_MS = 600;
+const BARK_FX_MS = 320;
+const BARK_BOUNCE_MS = 280;
 const POP_LIFE_MS = 900;
 const POP_MAX = 10;
 const MAX_RECONNECT_ATTEMPTS = 12;
@@ -114,6 +115,8 @@ export default function BarkRoom() {
   const runningRef = useRef(false);
   const lastOppScoreRef = useRef(0);
   const lastMyScoreRef = useRef(0);
+  const myDogRef = useRef<HTMLDivElement>(null);
+  const oppDogRef = useRef<HTMLDivElement>(null);
 
   const [audio, setAudio] = useState<AudioState>("idle");
   const [audioError, setAudioError] = useState<string | null>(null);
@@ -368,6 +371,12 @@ export default function BarkRoom() {
 
   useEffect(() => {
     if (myBarkAt === 0) return;
+    const el = myDogRef.current;
+    if (el) {
+      el.style.animation = "none";
+      void el.offsetWidth; // force reflow so the animation replays each bark
+      el.style.animation = `dog-bark ${BARK_BOUNCE_MS}ms ease-out`;
+    }
     const fresh = spawnPops("left", 2 + Math.floor(Math.random() * 2), "yellow");
     setMyPops((prev) => [...prev, ...fresh].slice(-POP_MAX));
     const t = setTimeout(() => {
@@ -378,6 +387,12 @@ export default function BarkRoom() {
 
   useEffect(() => {
     if (oppBarkAt === 0) return;
+    const el = oppDogRef.current;
+    if (el) {
+      el.style.animation = "none";
+      void el.offsetWidth; // force reflow so the animation replays each bark
+      el.style.animation = `dog-bark ${BARK_BOUNCE_MS}ms ease-out`;
+    }
     const fresh = spawnPops("right", 2 + Math.floor(Math.random() * 2), "orange");
     setOppPops((prev) => [...prev, ...fresh].slice(-POP_MAX));
     const t = setTimeout(() => {
@@ -614,7 +629,7 @@ export default function BarkRoom() {
         <div
           className="absolute left-[3%] sm:left-[8%] bottom-[18%] sm:bottom-[20%] z-10"
           style={{
-            transform: `scale(${myBarking ? 1.28 : 1}) translateX(${myBarking ? 6 : 0}px)`,
+            transform: `translateX(${myBarking ? 6 : 0}px)`,
             transition: "transform 100ms ease-out",
             filter: myBarking ? "drop-shadow(0 0 32px rgba(253, 224, 71, 0.85))" : "none",
           }}
@@ -633,13 +648,17 @@ export default function BarkRoom() {
             </>
           )}
 
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={myBarking ? "/dogmad.png" : "/dog.png"}
-            alt="you"
-            draggable={false}
-            className="relative w-44 sm:w-72 h-auto pointer-events-none"
-          />
+          <div ref={myDogRef} className="dog-bark-anim relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={myBarking ? "/dogmad.png" : "/dog.png"}
+              alt="you"
+              draggable={false}
+              className={`h-auto pointer-events-none ${
+                myBarking ? "w-56 sm:w-96" : "w-44 sm:w-72"
+              }`}
+            />
+          </div>
 
           {myPops.map((p) => (
             <div
@@ -664,7 +683,7 @@ export default function BarkRoom() {
         <div
           className="absolute right-[3%] sm:right-[8%] bottom-[18%] sm:bottom-[20%] z-10"
           style={{
-            transform: `scale(${oppBarking ? 1.28 : 1}) translateX(${oppBarking ? -6 : 0}px)`,
+            transform: `translateX(${oppBarking ? -6 : 0}px)`,
             transition: "transform 100ms ease-out",
             filter: oppBarking ? "drop-shadow(0 0 32px rgba(252, 165, 165, 0.85))" : "none",
           }}
@@ -683,14 +702,18 @@ export default function BarkRoom() {
             </>
           )}
 
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={oppBarking ? "/dogmad.png" : "/dog.png"}
-            alt="opp"
-            draggable={false}
-            className="relative w-44 sm:w-72 h-auto pointer-events-none"
-            style={{ transform: "scaleX(-1)" }}
-          />
+          <div ref={oppDogRef} className="dog-bark-anim relative">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={oppBarking ? "/dogmad.png" : "/dog.png"}
+              alt="opp"
+              draggable={false}
+              className={`h-auto pointer-events-none ${
+                oppBarking ? "w-56 sm:w-96" : "w-44 sm:w-72"
+              }`}
+              style={{ transform: "scaleX(-1)" }}
+            />
+          </div>
 
           {oppPops.map((p) => (
             <div
@@ -919,6 +942,20 @@ export default function BarkRoom() {
             display: inline-block;
             transform-origin: center;
             animation: bark-pop ${POP_LIFE_MS}ms ease-out forwards;
+          }
+          @keyframes dog-bark {
+            0% {
+              transform: scale(1);
+            }
+            38% {
+              transform: scale(1.28);
+            }
+            100% {
+              transform: scale(1);
+            }
+          }
+          .dog-bark-anim {
+            transform-origin: bottom center;
           }
         `}</style>
       </div>
