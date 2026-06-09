@@ -397,7 +397,7 @@ export default function SixSevenRoom() {
   const myScore = server?.scores[myIdx] ?? 0;
   const oppScore = server?.scores[oppIdx] ?? 0;
   const gameStatus: GameStatus = server?.status ?? "waiting";
-  const timeLeft = server?.timeLeft ?? 60;
+  const timeLeft = server?.timeLeft ?? 20;
   const winner = server?.winner ?? null;
 
   const youWon = winner !== null && winner === myIdx;

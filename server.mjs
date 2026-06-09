@@ -10,7 +10,7 @@ const port = Number(process.env.PORT) || 3000;
 const app = next({ dev, hostname, port });
 const handle = app.getRequestHandler();
 
-const DURATION_SEC = 60;
+const DURATION_SEC = 20;
 const CODE_RE = /^[A-Z2-9]{4,8}$/;
 const SLOT_GRACE_MS = 5000;
 const ROOM_GRACE_MS = 15000;
