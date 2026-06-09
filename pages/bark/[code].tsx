@@ -34,8 +34,9 @@ const FREQ_MAX = 4000;
 const COOLDOWN_MS = 220;
 const BARK_FX_MS = 320;
 const BARK_BOUNCE_MS = 280;
-const POP_LIFE_MS = 900;
-const POP_MAX = 10;
+const BARK_LINGER_MS = 750; // how long the mad face stays after the last bark
+const POP_LIFE_MS = 1100;
+const POP_MAX = 30;
 const MAX_RECONNECT_ATTEMPTS = 12;
 
 const BARK_WORDS = [
@@ -68,16 +69,17 @@ function spawnPops(
   color: "yellow" | "orange",
 ): Pop[] {
   return Array.from({ length: count }, () => {
-    const angle = -150 + Math.random() * 120; // upper hemisphere
-    const distance = 70 + Math.random() * 70;
+    const angle = Math.random() * 360; // full circle — osu-style burst
+    const distance = 90 + Math.random() * 140;
     const rad = (angle * Math.PI) / 180;
     return {
       id: ++popIdCounter,
       word: BARK_WORDS[Math.floor(Math.random() * BARK_WORDS.length)],
-      dx: Math.cos(rad) * distance * (side === "left" ? 1 : -1),
-      dy: Math.sin(rad) * distance,
-      rot: -25 + Math.random() * 50,
-      scale: 0.85 + Math.random() * 0.55,
+      // bias outward, away from the screen edge the dog sits on
+      dx: Math.cos(rad) * distance + (side === "left" ? 24 : -24),
+      dy: Math.sin(rad) * distance - 30,
+      rot: -35 + Math.random() * 70,
+      scale: 0.8 + Math.random() * 0.7,
       color,
     };
   });
@@ -386,7 +388,7 @@ export default function BarkRoom() {
       void el.offsetWidth; // force reflow so the animation replays each bark
       el.style.animation = `dog-bark ${BARK_BOUNCE_MS}ms ease-out`;
     }
-    const fresh = spawnPops("left", 2 + Math.floor(Math.random() * 2), "yellow");
+    const fresh = spawnPops("left", 3 + Math.floor(Math.random() * 3), "yellow");
     setMyPops((prev) => [...prev, ...fresh].slice(-POP_MAX));
     const t = setTimeout(() => {
       setMyPops((prev) => prev.filter((p) => !fresh.some((f) => f.id === p.id)));
@@ -402,7 +404,7 @@ export default function BarkRoom() {
       void el.offsetWidth; // force reflow so the animation replays each bark
       el.style.animation = `dog-bark ${BARK_BOUNCE_MS}ms ease-out`;
     }
-    const fresh = spawnPops("right", 2 + Math.floor(Math.random() * 2), "orange");
+    const fresh = spawnPops("right", 3 + Math.floor(Math.random() * 3), "orange");
     setOppPops((prev) => [...prev, ...fresh].slice(-POP_MAX));
     const t = setTimeout(() => {
       setOppPops((prev) => prev.filter((p) => !fresh.some((f) => f.id === p.id)));
@@ -484,7 +486,7 @@ export default function BarkRoom() {
   const myScore = server?.scores[myIdx] ?? 0;
   const oppScore = server?.scores[oppIdx] ?? 0;
   const gameStatus: GameStatus = server?.status ?? "waiting";
-  const timeLeft = server?.timeLeft ?? 20;
+  const timeLeft = server?.timeLeft ?? 10;
   const winner = server?.winner ?? null;
 
   const youWon = winner !== null && winner === myIdx;
@@ -515,13 +517,13 @@ export default function BarkRoom() {
   const now = Date.now();
   const mySinceBark = now - myBarkAt;
   const oppSinceBark = now - oppBarkAt;
+  // recent bark → glow + rings + bounce (short)
   const myBarking = mySinceBark < BARK_FX_MS;
   const oppBarking = oppSinceBark < BARK_FX_MS;
+  // mad face lingers while barking continuously; reverts after a quiet gap or once the round ends
+  const myMad = gameStatus !== "finished" && mySinceBark < BARK_LINGER_MS;
+  const oppMad = gameStatus !== "finished" && oppSinceBark < BARK_LINGER_MS;
   void tick;
-
-  const scoreMax = Math.max(20, myScore + 4, oppScore + 4);
-  const myPct = Math.min(100, (myScore / scoreMax) * 100);
-  const oppPct = Math.min(100, (oppScore / scoreMax) * 100);
 
   const totalBarks = myScore + oppScore;
   const leftShare =
@@ -636,11 +638,13 @@ export default function BarkRoom() {
         </div>
 
         <div
-          className="absolute left-[3%] sm:left-[8%] bottom-[18%] sm:bottom-[20%] z-10"
+          className={`absolute left-[3%] sm:left-[8%] bottom-[18%] sm:bottom-[20%] z-10 ${
+            gameStatus === "finished" && youLost ? "dog-roll-left" : ""
+          }`}
           style={{
-            transform: `translateX(${myBarking ? 6 : 0}px)`,
+            transform: `translateX(${myMad ? 6 : 0}px)`,
             transition: "transform 100ms ease-out",
-            filter: myBarking ? "drop-shadow(0 0 32px rgba(253, 224, 71, 0.85))" : "none",
+            filter: myMad ? "drop-shadow(0 0 32px rgba(253, 224, 71, 0.85))" : "none",
           }}
         >
           {myBarking && (
@@ -660,41 +664,41 @@ export default function BarkRoom() {
           <div ref={myDogRef} className="dog-bark-anim relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={myBarking ? "/dogmad.png" : "/dog.png"}
+              src={myMad ? "/dogmad.png" : "/dog.png"}
               alt="you"
               draggable={false}
               className={`h-auto pointer-events-none ${
-                myBarking ? "w-56 sm:w-96" : "w-44 sm:w-72"
+                myMad ? "w-[448px] sm:w-[768px]" : "w-[352px] sm:w-[576px]"
               }`}
             />
           </div>
 
           {myPops.map((p) => (
-            <div
+            <span
               key={p.id}
-              className="absolute top-0 left-1/2 pointer-events-none"
+              className={`bark-pop pointer-events-none absolute left-1/2 top-[15%] z-20 inline-block px-3 py-0.5 font-black text-amber-950 text-xl sm:text-3xl rounded-full border-[3px] border-amber-900 whitespace-nowrap shadow-lg ${
+                p.color === "yellow" ? "bg-yellow-200" : "bg-orange-200"
+              }`}
               style={{
-                transform: `translate(calc(-50% + ${p.dx}px), ${p.dy}px) rotate(${p.rot}deg)`,
+                ["--tx" as unknown as string]: `${p.dx}px`,
+                ["--ty" as unknown as string]: `${p.dy}px`,
+                ["--rot" as unknown as string]: `${p.rot}deg`,
+                ["--pop-scale" as unknown as string]: p.scale,
               }}
             >
-              <span
-                className={`bark-pop inline-block px-3 py-0.5 font-black text-amber-950 text-lg sm:text-2xl rounded-full border-[3px] border-amber-900 whitespace-nowrap shadow ${
-                  p.color === "yellow" ? "bg-yellow-200" : "bg-orange-200"
-                }`}
-                style={{ ["--pop-scale" as unknown as string]: p.scale }}
-              >
-                {p.word}
-              </span>
-            </div>
+              {p.word}
+            </span>
           ))}
         </div>
 
         <div
-          className="absolute right-[3%] sm:right-[8%] bottom-[18%] sm:bottom-[20%] z-10"
+          className={`absolute right-[3%] sm:right-[8%] bottom-[18%] sm:bottom-[20%] z-10 ${
+            gameStatus === "finished" && youWon ? "dog-roll-right" : ""
+          }`}
           style={{
-            transform: `translateX(${oppBarking ? -6 : 0}px)`,
+            transform: `translateX(${oppMad ? -6 : 0}px)`,
             transition: "transform 100ms ease-out",
-            filter: oppBarking ? "drop-shadow(0 0 32px rgba(252, 165, 165, 0.85))" : "none",
+            filter: oppMad ? "drop-shadow(0 0 32px rgba(252, 165, 165, 0.85))" : "none",
           }}
         >
           {oppBarking && (
@@ -714,33 +718,31 @@ export default function BarkRoom() {
           <div ref={oppDogRef} className="dog-bark-anim relative">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={oppBarking ? "/dogmad.png" : "/dog.png"}
+              src={oppMad ? "/dogmad.png" : "/dog.png"}
               alt="opp"
               draggable={false}
               className={`h-auto pointer-events-none ${
-                oppBarking ? "w-56 sm:w-96" : "w-44 sm:w-72"
+                oppMad ? "w-[448px] sm:w-[768px]" : "w-[352px] sm:w-[576px]"
               }`}
               style={{ transform: "scaleX(-1)" }}
             />
           </div>
 
           {oppPops.map((p) => (
-            <div
+            <span
               key={p.id}
-              className="absolute top-0 left-1/2 pointer-events-none"
+              className={`bark-pop pointer-events-none absolute left-1/2 top-[15%] z-20 inline-block px-3 py-0.5 font-black text-amber-950 text-xl sm:text-3xl rounded-full border-[3px] border-amber-900 whitespace-nowrap shadow-lg ${
+                p.color === "yellow" ? "bg-yellow-200" : "bg-orange-200"
+              }`}
               style={{
-                transform: `translate(calc(-50% + ${p.dx}px), ${p.dy}px) rotate(${p.rot}deg)`,
+                ["--tx" as unknown as string]: `${p.dx}px`,
+                ["--ty" as unknown as string]: `${p.dy}px`,
+                ["--rot" as unknown as string]: `${p.rot}deg`,
+                ["--pop-scale" as unknown as string]: p.scale,
               }}
             >
-              <span
-                className={`bark-pop inline-block px-3 py-0.5 font-black text-amber-950 text-lg sm:text-2xl rounded-full border-[3px] border-amber-900 whitespace-nowrap shadow ${
-                  p.color === "yellow" ? "bg-yellow-200" : "bg-orange-200"
-                }`}
-                style={{ ["--pop-scale" as unknown as string]: p.scale }}
-              >
-                {p.word}
-              </span>
-            </div>
+              {p.word}
+            </span>
           ))}
         </div>
 
@@ -932,25 +934,20 @@ export default function BarkRoom() {
           @keyframes bark-pop {
             0% {
               opacity: 0;
-              transform: scale(calc(var(--pop-scale, 1) * 0.3));
+              transform: translate(-50%, -50%) scale(calc(var(--pop-scale, 1) * 0.3)) rotate(0deg);
             }
-            18% {
+            25% {
               opacity: 1;
-              transform: scale(calc(var(--pop-scale, 1) * 1.35));
-            }
-            72% {
-              opacity: 1;
-              transform: scale(calc(var(--pop-scale, 1) * 1));
+              transform: translate(-50%, -50%) scale(calc(var(--pop-scale, 1) * 1.25)) rotate(0deg);
             }
             100% {
               opacity: 0;
-              transform: scale(calc(var(--pop-scale, 1) * 0.95)) translateY(-32px);
+              transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px))) scale(calc(var(--pop-scale, 1) * 1)) rotate(var(--rot, 0deg));
             }
           }
           .bark-pop {
-            display: inline-block;
             transform-origin: center;
-            animation: bark-pop ${POP_LIFE_MS}ms ease-out forwards;
+            animation: bark-pop ${POP_LIFE_MS}ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
           }
           @keyframes dog-bark {
             0% {
@@ -965,6 +962,32 @@ export default function BarkRoom() {
           }
           .dog-bark-anim {
             transform-origin: bottom center;
+          }
+          @keyframes dog-roll-left {
+            0% {
+              transform: translateX(0) rotate(0deg);
+              opacity: 1;
+            }
+            100% {
+              transform: translateX(-140vw) rotate(-1080deg);
+              opacity: 0;
+            }
+          }
+          @keyframes dog-roll-right {
+            0% {
+              transform: translateX(0) rotate(0deg);
+              opacity: 1;
+            }
+            100% {
+              transform: translateX(140vw) rotate(1080deg);
+              opacity: 0;
+            }
+          }
+          .dog-roll-left {
+            animation: dog-roll-left 1.2s cubic-bezier(0.45, 0, 0.7, 1) forwards;
+          }
+          .dog-roll-right {
+            animation: dog-roll-right 1.2s cubic-bezier(0.45, 0, 0.7, 1) forwards;
           }
         `}</style>
       </div>
