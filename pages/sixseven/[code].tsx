@@ -109,11 +109,6 @@ const HAND_CONNECTIONS: [number, number][] = [
   [0, 17],
 ];
 
-function formatTime(seconds: number) {
-  const s = Math.max(0, Math.floor(seconds));
-  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
-}
-
 function getClientId(): string {
   if (typeof window === "undefined") return "";
   const key = "sixseven-client-id";
@@ -201,7 +196,7 @@ export default function SixSevenRoom() {
     QRCode.toDataURL(url, {
       width: 256,
       margin: 1,
-      color: { dark: "#f4f4f5", light: "#0000" },
+      color: { dark: "#fef3c7", light: "#0000" },
     })
       .then(setQrDataUrl)
       .catch(() => setQrDataUrl(null));
@@ -488,6 +483,15 @@ export default function SixSevenRoom() {
 
   const showInvite = role === "host" && peers.guest === "empty";
 
+  const totalSwaps = myScore + oppScore;
+  const leftShare =
+    totalSwaps === 0
+      ? 50
+      : Math.max(5, Math.min(95, (myScore / totalSwaps) * 100));
+
+  const showWagerPanel =
+    matchStatus !== 3 && gameStatus !== "running" && !showInvite && !bothFunded;
+
   const statusText = (s: SeesawStatus) => {
     switch (s.kind) {
       case "waiting": return "Show both hands";
@@ -512,215 +516,96 @@ export default function SixSevenRoom() {
         <title>{`What's 67? · ${code}`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
-      <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6">
-        <div className="max-w-5xl mx-auto">
-          <header className="flex flex-wrap items-center justify-between gap-3 mb-5">
-            <div className="flex items-center gap-3">
-              <Link href="/sixseven" className="text-zinc-500 hover:text-zinc-200 text-sm">
-                ← Leave
-              </Link>
-              <div>
-                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
-                  <span className="bg-gradient-to-r from-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">
-                    What&apos;s 67?
-                  </span>
-                </h1>
-                <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2 mt-0.5">
-                  <span>Room <span className="text-zinc-200 font-mono">{code}</span></span>
-                  {role && <span className="text-zinc-200">· you are {role}</span>}
-                  {connPill && (
-                    <span
-                      className={`px-2 py-0.5 rounded font-mono text-[10px] ${
-                        connPill.tone === "red"
-                          ? "bg-red-500/20 text-red-300"
-                          : connPill.tone === "amber"
-                            ? "bg-amber-500/20 text-amber-300"
-                            : "bg-blue-500/20 text-blue-300"
-                      }`}
-                    >
-                      {connPill.text}
-                    </span>
-                  )}
-                </div>
-              </div>
-            </div>
-            <div className="flex items-center gap-3">
-              <div
-                className={`text-3xl sm:text-4xl font-mono tabular-nums px-4 py-2 rounded-lg border ${
-                  timeLeft <= 10 && gameStatus === "running"
-                    ? "border-red-500/60 text-red-300 animate-pulse"
-                    : "border-zinc-800 text-zinc-100"
-                }`}
-              >
-                {formatTime(timeLeft)}
-              </div>
-              {role === "host" && gameStatus !== "running" && (
-                <button
-                  onClick={sendStart}
-                  disabled={!opponentReady || !ready || conn !== "online" || !bothFunded}
-                  title={!bothFunded ? "Both players must lock a wager first" : undefined}
-                  className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-bold text-black"
+      <div className="fixed inset-0 overflow-hidden bg-gradient-to-b from-amber-900 via-orange-800 to-amber-950 text-zinc-100 select-none">
+        <header className="absolute top-0 inset-x-0 z-30 px-3 sm:px-6 py-3 flex items-center justify-between gap-2 bg-gradient-to-b from-black/60 to-transparent">
+          <div className="flex items-center gap-2">
+            <Link
+              href="/sixseven"
+              className="bg-black/50 hover:bg-black/70 backdrop-blur border border-white/15 px-3 py-1.5 rounded-lg text-amber-100 text-sm font-bold"
+            >
+              ← Leave
+            </Link>
+            <div className="hidden sm:flex items-center gap-2 bg-black/50 backdrop-blur border border-white/15 px-3 py-1.5 rounded-lg text-[11px] uppercase tracking-widest text-amber-100/90">
+              <span>
+                Room <span className="text-amber-200 font-mono">{code}</span>
+              </span>
+              {role && <span className="text-amber-200">· {role}</span>}
+              {connPill && (
+                <span
+                  className={`px-2 py-0.5 rounded font-mono text-[10px] ${
+                    connPill.tone === "red"
+                      ? "bg-red-500/30 text-red-200"
+                      : connPill.tone === "amber"
+                        ? "bg-amber-500/30 text-amber-100"
+                        : "bg-blue-500/30 text-blue-200"
+                  }`}
                 >
-                  {gameStatus === "finished" ? "Play again" : "Start"}
-                </button>
+                  {connPill.text}
+                </span>
               )}
-              {role === "host" && (gameStatus === "running" || gameStatus === "finished") && (
-                <button
-                  onClick={sendReset}
-                  className="px-5 py-2.5 bg-zinc-800 hover:bg-zinc-700 rounded-lg font-bold"
-                >
-                  Reset
-                </button>
-              )}
-            </div>
-          </header>
-
-          <div className="grid grid-cols-2 gap-3 mb-5">
-            <div className="rounded-xl p-4 bg-gradient-to-br from-cyan-500/20 to-blue-600/10 border border-cyan-500/30">
-              <div className="text-xs uppercase tracking-widest text-cyan-300">You</div>
-              <div className="text-5xl sm:text-6xl font-mono font-extrabold tabular-nums mt-1">
-                {myScore}
-              </div>
-            </div>
-            <div className="rounded-xl p-4 bg-gradient-to-br from-fuchsia-500/20 to-rose-600/10 border border-fuchsia-500/30">
-              <div className="text-xs uppercase tracking-widest text-fuchsia-300">
-                Opponent{opponentLabel}
-              </div>
-              <div className="text-5xl sm:text-6xl font-mono font-extrabold tabular-nums mt-1">
-                {oppScore}
-              </div>
             </div>
           </div>
-
-          {matchStatus !== 3 && gameStatus !== "running" && (
-            <div className="mb-5 p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl">
-              <div className="flex items-center justify-between mb-3">
-                <div className="text-xs uppercase tracking-widest text-zinc-400">
-                  Wager · winner takes all
-                </div>
-                {bothFunded && (
-                  <div className="text-emerald-400 text-sm font-bold font-mono">
-                    Pot {formatEther(pot)} MON
-                  </div>
-                )}
-              </div>
-
-              {!isConnected ? (
-                <div className="text-sm text-zinc-400">
-                  Connect your wallet to place a wager.
-                </div>
-              ) : !iStaked ? (
-                role === "guest" && matchStatus === 0 ? (
-                  <div className="text-sm text-zinc-400">
-                    Waiting for the host to set the stake…
-                  </div>
-                ) : (
-                  <div className="flex gap-2 items-center">
-                    <div className="relative flex-1">
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={wager}
-                        onChange={(e) => setWager(e.target.value)}
-                        className="w-full px-4 py-3 bg-zinc-950 border border-zinc-700 rounded-lg font-mono text-lg pr-16 focus:outline-none focus:border-violet-500"
-                      />
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-mono">
-                        MON
-                      </span>
-                    </div>
-                    <button
-                      onClick={lockWager}
-                      disabled={txBusy}
-                      className="px-5 py-3 bg-violet-500 hover:bg-violet-400 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-bold text-black whitespace-nowrap"
-                    >
-                      {txBusy
-                        ? "Locking…"
-                        : role === "host"
-                          ? "Stake & host"
-                          : "Stake & join"}
-                    </button>
-                  </div>
-                )
-              ) : !bothFunded ? (
-                <div className="text-sm text-zinc-300">
-                  You staked{" "}
-                  <span className="font-mono text-white">
-                    {formatEther(role === "host" ? hostStake : guestStake)} MON
-                  </span>
-                  . Waiting for your opponent to match…
-                  {role === "host" && matchStatus === 1 && (
-                    <button
-                      onClick={cancelWager}
-                      disabled={txBusy}
-                      className="ml-3 text-zinc-400 underline hover:text-zinc-200 disabled:opacity-40"
-                    >
-                      cancel &amp; refund
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="text-sm text-zinc-300">
-                  Both wagers locked —{" "}
-                  <span className="font-mono text-white">{formatEther(pot)} MON</span>{" "}
-                  pot. {role === "host" ? "Hit Start when you're ready." : "Waiting for host to start."}
-                </div>
-              )}
-            </div>
-          )}
-
-          {fatalError && (
-            <div className="mb-4 p-4 bg-red-950/40 border border-red-900 rounded-lg text-sm">
-              {fatalError}
-            </div>
-          )}
-
-          {loadError && (
-            <div className="mb-4 p-4 bg-red-950/40 border border-red-900 rounded-lg text-sm">
-              Could not start hand detection: {loadError}.
-            </div>
-          )}
-
-          {!ready && !loadError && (
-            <div className="mb-4 p-4 bg-blue-950/40 border border-blue-900 rounded-lg text-sm">
-              Loading hand-tracking model… (grant camera access if prompted)
-            </div>
-          )}
-
-          {gameStatus === "finished" && (
-            <div className="mb-4 p-6 bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/50 rounded-xl text-center">
-              <div className="text-xs uppercase tracking-[0.2em] text-amber-300">Game over</div>
-              <div className="text-4xl sm:text-5xl font-bold mt-2">
-                {tied ? "It's a tie!" : youWon ? "You win!" : youLost ? "You lose" : ""}
-              </div>
-              <div className="mt-2 text-zinc-300 font-mono">
-                {myScore} – {oppScore}
-              </div>
-              {pot > 0n && (
-                <div className="mt-3 text-sm">
-                  {matchStatus === 3 ? (
-                    tied ? (
-                      <span className="text-emerald-300">Tie — stakes refunded on-chain.</span>
-                    ) : (
-                      <span className="text-emerald-300">
-                        Pot {formatEther(pot)} MON paid out · Six Seven Master minted to the winner 🏆
-                      </span>
-                    )
-                  ) : (
-                    <span className="text-amber-200">Settling on-chain…</span>
-                  )}
-                </div>
-              )}
-              <Link
-                href="/sixseven"
-                className="inline-block mt-4 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-bold"
+          <div className="flex items-center gap-2">
+            {role === "host" && gameStatus !== "running" && (
+              <button
+                onClick={sendStart}
+                disabled={!opponentReady || !ready || conn !== "online" || !bothFunded}
+                title={!bothFunded ? "Both players must lock a wager first" : undefined}
+                className="px-5 py-2.5 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-black uppercase tracking-wider text-amber-950 shadow-lg"
               >
-                New match
-              </Link>
-            </div>
-          )}
+                {gameStatus === "finished" ? "Again" : "Start"}
+              </button>
+            )}
+            {role === "host" && (gameStatus === "running" || gameStatus === "finished") && (
+              <button
+                onClick={sendReset}
+                className="px-4 py-2.5 bg-black/50 hover:bg-black/70 backdrop-blur border border-white/20 rounded-lg font-bold text-amber-100"
+              >
+                Reset
+              </button>
+            )}
+          </div>
+        </header>
 
-          <div className="rounded-xl overflow-hidden border border-zinc-800 bg-zinc-900/60">
+        <div className="absolute top-[68px] sm:top-20 inset-x-0 z-20 flex flex-col items-center pointer-events-none">
+          <div className="w-[82%] max-w-lg relative">
+            <div className="relative h-4 rounded-full overflow-hidden border-2 border-amber-950 bg-white/30 shadow">
+              <div
+                className="absolute inset-y-0 left-0 bg-gradient-to-r from-amber-600 via-amber-400 to-yellow-200 transition-[width] duration-200"
+                style={{ width: `${leftShare}%` }}
+              />
+              <div
+                className="absolute inset-y-0 right-0 bg-gradient-to-l from-slate-500 via-slate-300 to-slate-100 transition-[width] duration-200"
+                style={{ width: `${100 - leftShare}%` }}
+              />
+            </div>
+            <div
+              className="absolute top-1/2 w-5 h-5 -mt-2.5 -ml-2.5 rounded-full bg-white border-2 border-amber-950 shadow-md transition-[left] duration-200"
+              style={{ left: `${leftShare}%` }}
+            />
+          </div>
+          <div
+            className={`mt-2 text-5xl sm:text-7xl font-black tabular-nums drop-shadow-[0_3px_0_rgba(0,0,0,0.55)] ${
+              timeLeft <= 5 && gameStatus === "running"
+                ? "text-red-200 animate-pulse"
+                : "text-white"
+            }`}
+          >
+            {timeLeft}
+          </div>
+          <div className="mt-1 flex items-center gap-5 text-[11px] uppercase tracking-widest text-white drop-shadow">
+            <span>
+              You <span className="font-mono text-amber-200 ml-1">{myScore}</span>
+            </span>
+            <span>
+              Opp{opponentLabel}
+              <span className="font-mono text-amber-200 ml-1">{oppScore}</span>
+            </span>
+          </div>
+        </div>
+
+        <div className="absolute left-1/2 -translate-x-1/2 bottom-[88px] sm:bottom-[96px] top-[200px] sm:top-[240px] z-10 w-[92%] max-w-3xl flex items-center">
+          <div className="w-full rounded-2xl overflow-hidden border-2 border-amber-300/60 bg-black/40 shadow-2xl">
             <div className="relative aspect-video bg-black">
               <video
                 ref={videoRef}
@@ -733,7 +618,7 @@ export default function SixSevenRoom() {
                 ref={canvasRef}
                 className="absolute inset-0 w-full h-full -scale-x-100"
               />
-              <div className="absolute top-2 left-2 text-xs px-2 py-1 bg-black/70 rounded font-mono">
+              <div className="absolute top-2 left-2 text-xs px-2 py-1 bg-black/70 rounded font-mono text-amber-100">
                 {statusText(status)}
               </div>
               {status.kind === "tilt" && (
@@ -754,69 +639,205 @@ export default function SixSevenRoom() {
                   </div>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
 
-              {showInvite && (
-                <div className="absolute inset-0 bg-black/85 flex items-center justify-center -scale-x-100">
-                  <div className="-scale-x-100 max-w-sm w-full p-6 text-center">
-                    <div className="text-xs uppercase tracking-[0.2em] text-zinc-400">
-                      Waiting for opponent
-                    </div>
-                    <div className="text-2xl font-bold mt-1 mb-4">Share this room</div>
-                    {qrDataUrl && (
-                      <img
-                        src={qrDataUrl}
-                        alt="Invite QR"
-                        className="w-56 h-56 mx-auto mb-4 rounded-lg"
-                      />
-                    )}
-                    <div className="font-mono text-3xl tracking-[0.4em] mb-3 text-zinc-100">
-                      {code}
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <input
-                        readOnly
-                        value={inviteUrl}
-                        className="flex-1 px-3 py-2 text-xs bg-zinc-900 border border-zinc-700 rounded font-mono truncate"
-                        onFocus={(e) => e.currentTarget.select()}
-                      />
-                      <button
-                        onClick={copyInvite}
-                        className="px-3 py-2 bg-zinc-800 hover:bg-zinc-700 rounded text-xs font-bold"
-                      >
-                        {copyState === "copied" ? "Copied" : "Copy"}
-                      </button>
-                    </div>
+        <div className="absolute bottom-0 inset-x-0 z-20 px-3 sm:px-6 py-3 bg-gradient-to-t from-black/70 to-transparent flex items-center gap-3">
+          <label className="text-[11px] uppercase tracking-widest text-amber-100 shrink-0 drop-shadow">
+            Camera
+          </label>
+          <select
+            value={camId}
+            onChange={(e) => setCamId(e.target.value)}
+            className="flex-1 min-w-[160px] bg-black/40 border border-white/20 backdrop-blur rounded-lg px-3 py-1.5 text-sm text-amber-100 focus:outline-none focus:border-amber-400"
+          >
+            {cameras.length === 0 && <option value="">No cameras found</option>}
+            {cameras.map((c) => (
+              <option key={c.deviceId} value={c.deviceId} className="text-zinc-900">
+                {c.label || `Camera ${c.deviceId.slice(0, 6)}`}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        {gameStatus === "running" && !ready && (
+          <div className="absolute top-[180px] left-1/2 -translate-x-1/2 z-20 bg-red-500/90 px-3 py-1 rounded-full text-xs font-bold">
+            Camera not ready
+          </div>
+        )}
+
+        {fatalError && (
+          <div className="absolute top-[180px] left-1/2 -translate-x-1/2 z-30 p-3 bg-red-950/80 backdrop-blur border border-red-900 rounded-lg text-sm max-w-md text-center">
+            {fatalError}
+          </div>
+        )}
+
+        {loadError && (
+          <div className="absolute top-[180px] left-1/2 -translate-x-1/2 z-30 p-3 bg-red-950/80 backdrop-blur border border-red-900 rounded-lg text-sm max-w-md text-center">
+            Could not start hand detection: {loadError}.
+          </div>
+        )}
+
+        {!ready && !loadError && !fatalError && (
+          <div className="absolute top-[180px] left-1/2 -translate-x-1/2 z-30 px-4 py-2 bg-black/60 backdrop-blur border border-white/20 rounded-lg text-sm text-amber-100 max-w-md text-center">
+            Loading hand-tracking model… (grant camera access if prompted)
+          </div>
+        )}
+
+        {gameStatus === "waiting" && !showInvite && !showWagerPanel && (
+          <div className="absolute inset-0 z-20 flex items-center justify-center pointer-events-none">
+            <div className="bg-black/50 backdrop-blur px-6 py-3 rounded-xl border border-white/20 text-amber-100 font-bold text-center">
+              {role === "host"
+                ? opponentReady
+                  ? "Press Start when ready"
+                  : "Waiting for opponent…"
+                : "Waiting for host to start…"}
+            </div>
+          </div>
+        )}
+
+        {showWagerPanel && (
+          <div className="absolute left-1/2 -translate-x-1/2 top-1/2 -translate-y-1/2 z-30 w-[92%] max-w-md">
+            <div className="p-4 bg-amber-950/95 backdrop-blur border border-amber-700/60 rounded-xl shadow-2xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs uppercase tracking-widest text-amber-200/70">
+                  Wager · winner takes all
+                </div>
+                {bothFunded && (
+                  <div className="text-emerald-300 text-sm font-bold font-mono">
+                    Pot {formatEther(pot)} MON
                   </div>
+                )}
+              </div>
+
+              {!isConnected ? (
+                <div className="text-sm text-amber-200/70">
+                  Connect your wallet to place a wager.
+                </div>
+              ) : !iStaked ? (
+                role === "guest" && matchStatus === 0 ? (
+                  <div className="text-sm text-amber-200/70">
+                    Waiting for the host to set the stake…
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={wager}
+                        onChange={(e) => setWager(e.target.value)}
+                        className="w-full px-4 py-3 bg-amber-950/70 border border-amber-700/50 rounded-lg font-mono text-lg pr-16 focus:outline-none focus:border-amber-400"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-amber-200/60 text-sm font-mono">
+                        MON
+                      </span>
+                    </div>
+                    <button
+                      onClick={lockWager}
+                      disabled={txBusy}
+                      className="px-5 py-3 bg-amber-400 hover:bg-amber-300 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-black uppercase tracking-wider text-amber-950 whitespace-nowrap"
+                    >
+                      {txBusy ? "Locking…" : role === "host" ? "Stake & host" : "Stake & join"}
+                    </button>
+                  </div>
+                )
+              ) : (
+                <div className="text-sm text-amber-100/90">
+                  You staked{" "}
+                  <span className="font-mono text-amber-50">
+                    {formatEther(role === "host" ? hostStake : guestStake)} MON
+                  </span>
+                  . Waiting for your opponent to match…
+                  {role === "host" && matchStatus === 1 && (
+                    <button
+                      onClick={cancelWager}
+                      disabled={txBusy}
+                      className="ml-3 text-amber-200/70 underline hover:text-amber-100 disabled:opacity-40"
+                    >
+                      cancel &amp; refund
+                    </button>
+                  )}
                 </div>
               )}
             </div>
-            <div className="p-3 flex flex-wrap items-center gap-3">
-              <label className="text-xs uppercase tracking-wider text-zinc-500">Camera</label>
-              <select
-                value={camId}
-                onChange={(e) => setCamId(e.target.value)}
-                className="flex-1 min-w-[200px] bg-zinc-800 border border-zinc-700 rounded px-2 py-1.5 text-sm focus:outline-none focus:border-zinc-500"
+          </div>
+        )}
+
+        {gameStatus === "finished" && (
+          <div className="absolute inset-0 z-40 flex items-center justify-center">
+            <div className="bg-black/70 backdrop-blur rounded-2xl px-8 py-6 border-2 border-amber-300/80 text-center shadow-2xl">
+              <div className="text-amber-300 text-xs uppercase tracking-[0.3em] mb-1">
+                Time&apos;s up
+              </div>
+              <div className="text-5xl sm:text-6xl font-black mb-1">
+                {tied ? "TIE" : youWon ? "YOU WIN!" : youLost ? "YOU LOSE" : ""}
+              </div>
+              <div className="font-mono text-amber-200/80">
+                {myScore} – {oppScore}
+              </div>
+              {pot > 0n && (
+                <div className="mt-2 text-sm">
+                  {matchStatus === 3 ? (
+                    tied ? (
+                      <span className="text-emerald-300">Tie — stakes refunded.</span>
+                    ) : (
+                      <span className="text-emerald-300">
+                        Pot {formatEther(pot)} MON paid out · Six Seven Master minted 🏆
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-amber-200">Settling on-chain…</span>
+                  )}
+                </div>
+              )}
+              <Link
+                href="/sixseven"
+                className="inline-block mt-4 px-4 py-2 bg-black/50 hover:bg-black/70 border border-white/20 rounded-lg text-sm font-bold text-amber-100"
               >
-                {cameras.length === 0 && <option value="">No cameras found</option>}
-                {cameras.map((c) => (
-                  <option key={c.deviceId} value={c.deviceId}>
-                    {c.label || `Camera ${c.deviceId.slice(0, 6)}`}
-                  </option>
-                ))}
-              </select>
+                New match
+              </Link>
             </div>
           </div>
+        )}
 
-          <div className="mt-5 p-4 bg-zinc-900/40 border border-zinc-800 rounded-lg text-sm text-zinc-400">
-            <div className="font-semibold text-zinc-200 mb-2">How to play</div>
-            <ul className="space-y-1 list-disc list-inside">
-              <li>Both players join the same room (scan the QR or visit the link).</li>
-              <li>Host taps <span className="font-semibold text-zinc-100">Start</span> once the opponent is in.</li>
-              <li>Hold both palms up to your camera and do the <span className="font-semibold text-zinc-100">six seven</span> seesaw — one hand up, the other down, alternating.</li>
-              <li>Every swap = +1. Most points when the timer hits 0 wins.</li>
-            </ul>
+        {showInvite && (
+          <div className="absolute inset-0 z-40 bg-black/85 flex items-center justify-center">
+            <div className="max-w-sm w-full p-6 text-center">
+              <div className="text-xs uppercase tracking-[0.2em] text-amber-200">
+                Waiting for opponent
+              </div>
+              <div className="text-2xl font-black mt-1 mb-4">Share this room</div>
+              {qrDataUrl && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={qrDataUrl}
+                  alt="Invite QR"
+                  className="w-56 h-56 mx-auto mb-4 rounded-lg bg-amber-900/40 p-2"
+                />
+              )}
+              <div className="font-mono text-3xl tracking-[0.4em] mb-3 text-amber-100">
+                {code}
+              </div>
+              <div className="flex items-center gap-2">
+                <input
+                  readOnly
+                  value={inviteUrl}
+                  className="flex-1 px-3 py-2 text-xs bg-amber-950/80 border border-amber-700/60 rounded font-mono truncate"
+                  onFocus={(e) => e.currentTarget.select()}
+                />
+                <button
+                  onClick={copyInvite}
+                  className="px-3 py-2 bg-amber-700/80 hover:bg-amber-600 rounded text-xs font-bold"
+                >
+                  {copyState === "copied" ? "Copied" : "Copy"}
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
+        )}
       </div>
     </>
   );
