@@ -311,6 +311,8 @@ export default function LibraryPage() {
           overflow: hidden;
           border-radius: var(--r-md);
           background: var(--thumb);
+          background-size: cover;
+          background-position: center;
           box-shadow: inset 0 0 0 1px var(--border), var(--shadow-md);
         }
 
