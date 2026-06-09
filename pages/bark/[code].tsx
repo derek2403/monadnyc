@@ -848,7 +848,7 @@ export default function BarkRoom() {
                       <span className="text-emerald-300">Tie — stakes refunded.</span>
                     ) : (
                       <span className="text-emerald-300">
-                        Pot {formatEther(pot)} MON paid out 🏆
+                        Pot {formatEther(pot)} MON paid out · Golden Collar minted 🏆
                       </span>
                     )
                   ) : (
