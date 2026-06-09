@@ -4,6 +4,7 @@
   "private": true,
   "scripts": {
     "dev": "node server.mjs",
+    "bark": "node bark-server.mjs",
     "build": "next build",
     "start": "NODE_ENV=production node server.mjs",
     "lint": "eslint"
