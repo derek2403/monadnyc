@@ -1,12 +1,11 @@
 # Deploying Monad Arcade → monad.derek2403.win
 
-Routed through your existing **Cloudflare Tunnel → nginx-proxy** stack, the same
-way as `dashboard.derek2403.win`: the tunnel sends the hostname to nginx on
-`localhost:80`, and nginx forwards by `server_name` to the app container on the
-`proxy` network.
+Routed through your **Cloudflare Tunnel** straight to the app — the same shape as
+`gym.derek2403.win → http://localhost:3000`. No nginx in the path: `cloudflared`
+terminates TLS and handles WebSockets, forwarding to the app's local port.
 
 ```
-Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared ─▶ nginx:80 ─▶ monad-app:3000
+Browser ──https──▶ Cloudflare ──tunnel──▶ cloudflared (host) ──▶ 127.0.0.1:8090 ──▶ monad-app:3000
 ```
 
 The app is a **custom Node server** (`server.mjs` runs Next + the `/api/ws` and
@@ -14,8 +13,7 @@ The app is a **custom Node server** (`server.mjs` runs Next + the `/api/ws` and
 
 > ### Use `monad.derek2403.win` (single-level)
 > Free Universal SSL covers `*.derek2403.win` (one level only). `www.monad…` is
-> two levels deep and would fail TLS without Advanced Certificate Manager. All
-> your other services are single-level, so stick with `monad.derek2403.win`.
+> two levels deep and needs Advanced Certificate Manager. Stay single-level.
 
 ---
 
@@ -23,98 +21,76 @@ The app is a **custom Node server** (`server.mjs` runs Next + the `/api/ws` and
 
 ```bash
 cd ~/projects
-git clone <YOUR_REPO_URL> monadnyc
+git clone <YOUR_REPO_URL> monadnyc   # (first time only)
 cd monadnyc
 ```
 
 Create **`.env`** (gitignored — never shipped). `server.mjs` reads this file at
-runtime:
+runtime, and `NEXT_PUBLIC_MONAD_RPC_URL` is baked into the bundle at build time:
 
-```bash
-nano .env
-```
 ```ini
-# Resolver / settlement wallet — must hold MON to pay gas on resolve().
 PRIVATE_KEY=0xYOUR_RESOLVER_PRIVATE_KEY
-
-# Dedicated RPC (recommended). Used by the browser (baked at build) AND server.
 NEXT_PUBLIC_MONAD_RPC_URL=https://monad-testnet.g.alchemy.com/v2/YOUR_KEY
-
-# Optional server-only RPC. If unset, falls back to the NEXT_PUBLIC one.
-MONAD_RPC_URL=https://monad-testnet.g.alchemy.com/v2/YOUR_KEY
+MONAD_RPC_URL=https://monad-testnet.g.alchemy.com/v2/YOUR_KEY   # optional, server-only
 ```
 
-Build + start (joins the `proxy` network; no host port published):
+Build + start (publishes `127.0.0.1:8090`):
 
 ```bash
 docker compose up -d --build
-docker compose logs -f      # expect "Ready on http://0.0.0.0:3000" + "resolver ready"
+docker compose logs -f      # expect "Ready on..." + "On-chain resolver ready: 0x..."
+curl -I http://127.0.0.1:8090   # expect HTTP/1.1 200
 ```
 
 ---
 
-## 2. Add the nginx vhost (matches your gym.conf / enclave.conf)
+## 2. Tunnel route (Cloudflare → Zero Trust → Networks → Tunnels → enclave-tunnel)
 
-```bash
-cp deploy/nginx/monad.derek2403.win.conf ~/nginx-proxy/conf.d/
-docker exec nginx-proxy nginx -t        # validate
-docker exec nginx-proxy nginx -s reload # apply (app must be up first)
-```
-
----
-
-## 3. Add the tunnel route (Cloudflare dashboard)
-
-**Zero Trust → Networks → Tunnels → `enclave-tunnel` → Add a published
-application** — same as your `dashboard` route:
+Add/confirm a published application — **same as your `gym` route**:
 
 | Field | Value |
 |---|---|
 | Subdomain | `monad` |
 | Domain | `derek2403.win` |
 | Type | `HTTP` |
-| URL | `localhost:80` |
+| **URL** | **`localhost:8090`** |
 
-Save. Cloudflare creates the DNS + cert. WebSockets pass through with no extra
-config.
+## 3. TLS (one-time, zone-wide)
 
-Then open **https://monad.derek2403.win** 🎉
+- **SSL/TLS → Overview → `Full`** (required for tunnels).
+- **SSL/TLS → Edge Certificates → Always Use HTTPS = On.**
+
+Open **https://monad.derek2403.win** 🎉
 
 ---
 
-## 4. Redeploying after code changes
+## Redeploying after code changes
 
+**Laptop:**
 ```bash
-cd ~/projects/monadnyc
-git pull
-docker compose up -d --build
+git add -A && git commit -m "your change" && git push origin main
 ```
-nginx re-resolves the container automatically (no reload needed). If you changed
-`NEXT_PUBLIC_MONAD_RPC_URL`, `--build` rebuilds the bundle with it.
+**Server:**
+```bash
+cd ~/projects/monadnyc && git pull origin main && docker compose up -d --build
+```
+The tunnel route and TLS are unchanged — nothing to touch in Cloudflare.
 
 > **Contract redeploys:** commit the updated `deployments/contracts.json` +
-> `lib/contracts.ts`, then `git pull` + rebuild so server and browser use the
-> new addresses.
+> `lib/contracts.ts`, then pull + rebuild so server and browser use the new
+> addresses.
 
 ---
 
 ## Troubleshooting
 
-| Symptom | Likely cause / fix |
+| Symptom | Fix |
 |---|---|
-| `502 Bad Gateway` | App not up / not on `proxy` net. `docker compose ps`, `docker network inspect proxy \| grep monad-app`. |
-| nginx `-t` fails: *"host not found in upstream"* | App container down — start it, then reload. The `resolver` line defers lookups, so this is usually only at first reload. |
-| Game connects but never settles | `docker compose logs` for `settle` lines; verify `PRIVATE_KEY` wallet holds MON and is the vault owner. |
-| Camera/mic blocked | Must be HTTPS — tunnel hostnames are HTTPS; also SSL/TLS → Edge Certificates → **Always Use HTTPS = On**. |
-| WS keeps reconnecting | Confirm the tunnel route Type is `HTTP` and the vhost has the `Upgrade`/`Connection` headers (it does). |
+| 502 Bad Gateway | App not on `127.0.0.1:8090`. `docker port monad-app` must show `3000/tcp -> 127.0.0.1:8090`; `curl -I http://127.0.0.1:8090`. Make sure the tunnel route URL is `localhost:8090`. |
+| HTTP works, HTTPS doesn't | SSL/TLS mode not `Full`, or Universal SSL still provisioning (wait ~15 min). |
+| Game never settles | `docker compose logs` for `settle` lines; `PRIVATE_KEY` wallet must hold MON and be the vault owner. |
+| Camera/mic blocked | Needs HTTPS — turn on Always Use HTTPS. |
 
----
-
-## Alternative: skip nginx (direct tunnel → app)
-If you'd rather not use nginx, publish the app on a free host port instead and
-point the tunnel route straight at it:
-- In `docker-compose.yml`, replace the `networks:` block with `ports: ["127.0.0.1:8090:3000"]`.
-- Tunnel route URL → `localhost:8090` (instead of `localhost:80`), no nginx conf.
-
-One less hop, but it doesn't match your dashboard setup. The nginx path above is
-recommended for consistency with your existing services.
+> The files in [`deploy/nginx/`](deploy/nginx/) are an **optional alternative**
+> (route the tunnel to `localhost:80` → nginx → `monad-app:3000` on the `proxy`
+> network). Not used by the direct setup above.
