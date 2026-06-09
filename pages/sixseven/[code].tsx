@@ -31,12 +31,9 @@ type ServerState = {
   peers: { host: PeerStatus; guest: PeerStatus };
 };
 
-const VISION_BUNDLE =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/vision_bundle.mjs";
-const WASM_BASE =
-  "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.18/wasm";
-const MODEL_URL =
-  "https://storage.googleapis.com/mediapipe-models/hand_landmarker/hand_landmarker/float16/1/hand_landmarker.task";
+const VISION_BUNDLE = "/mediapipe/vision_bundle.mjs";
+const WASM_BASE = "/mediapipe/wasm";
+const MODEL_URL = "/models/hand_landmarker.task";
 
 const SCORE_COOLDOWN_MS = 220;
 const TILT_THRESHOLD = 0.07;
