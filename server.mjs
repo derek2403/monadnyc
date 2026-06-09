@@ -41,15 +41,24 @@ try {
   if (pk && !pk.startsWith("0x")) pk = `0x${pk}`;
   if (!pk) throw new Error("PRIVATE_KEY missing");
 
+  // Prefer a dedicated RPC (e.g. Alchemy) for settlement — the public endpoint
+  // is rate-limited and makes resolve/receipt polling flaky under load.
+  const rpcUrl =
+    env.match(/^MONAD_RPC_URL=(.+)$/m)?.[1]?.trim() ||
+    env.match(/^NEXT_PUBLIC_MONAD_RPC_URL=(.+)$/m)?.[1]?.trim() ||
+    "https://testnet-rpc.monad.xyz";
+
   const chain = defineChain({
     id: deployments.chainId,
     name: "Monad Testnet",
     nativeCurrency: { decimals: 18, name: "Monad", symbol: "MON" },
-    rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
+    rpcUrls: { default: { http: [rpcUrl] } },
+    contracts: { multicall3: { address: "0xcA11bde05977b3631167028862bE2a173976CA11" } },
   });
   const account = privateKeyToAccount(pk);
-  publicClient = createPublicClient({ chain, transport: http() });
-  walletClient = createWalletClient({ account, chain, transport: http() });
+  publicClient = createPublicClient({ chain, transport: http(rpcUrl, { batch: true }) });
+  walletClient = createWalletClient({ account, chain, transport: http(rpcUrl) });
+  console.log("> RPC:", rpcUrl.replace(/\/v2\/.*/, "/v2/***"));
   vaultAbi = deployments.vaultAbi;
   vaultAddresses = { sixseven: deployments.vault, bark: deployments.barkVault };
   console.log("> On-chain resolver ready:", account.address);
@@ -154,7 +163,13 @@ function makeGame({ label, vaultAddress }) {
         functionName: "getMatch",
         args: [matchId],
       });
-      if (Number(m[4]) !== 2) return; // not funded (free play) → nothing to settle
+      const status = Number(m[4]);
+      // Only a Funded (2) match needs settling. Free play (0/1), already
+      // resolved (3) or cancelled (4) are terminal — mark done so we stop.
+      if (status !== 2) {
+        room.resolved = true;
+        return;
+      }
       const winnerRole = room.state.winner === null ? 2 : room.state.winner;
       const hash = await walletClient.writeContract({
         address: vaultAddress,
@@ -162,12 +177,31 @@ function makeGame({ label, vaultAddress }) {
         functionName: "resolve",
         args: [matchId, winnerRole],
       });
-      room.resolved = true;
-      console.log(`> [${label}:${room.code}] settled role=${winnerRole} tx=${hash}`);
+      // Wait for the receipt before declaring victory — a submitted tx that
+      // later reverts must NOT be treated as settled, or the room hangs forever.
+      const receipt = await publicClient.waitForTransactionReceipt({ hash });
+      if (receipt.status === "success") {
+        room.resolved = true;
+        console.log(`> [${label}:${room.code}] settled role=${winnerRole} tx=${hash}`);
+      } else {
+        console.error(`> [${label}:${room.code}] settle reverted ${hash} — will retry`);
+      }
     } catch (e) {
       console.error(`> [${label}:${room.code}] settle failed:`, e.shortMessage || e.message);
     } finally {
       room.resolving = false;
+    }
+  };
+
+  // Settlement can fail transiently (RPC blip, nonce race, momentary revert).
+  // Retry a few times with backoff so a finished match never gets stuck on
+  // "Settling on-chain". resolveOnChain self-heals: once the match reads back
+  // as Resolved it marks the room done.
+  const settleWithRetry = async (room) => {
+    for (let attempt = 0; attempt < 6 && !room.resolved; attempt++) {
+      await resolveOnChain(room);
+      if (room.resolved) return;
+      await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
     }
   };
 
@@ -190,7 +224,7 @@ function makeGame({ label, vaultAddress }) {
         room.state.timeLeft = 0;
         clearInterval(room.tickInterval);
         room.tickInterval = null;
-        resolveOnChain(room); // fire-and-forget payout
+        settleWithRetry(room); // fire-and-forget payout, retried on failure
       }
       broadcast(room);
     }, 1000);

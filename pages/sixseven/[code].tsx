@@ -157,7 +157,16 @@ export default function SixSevenRoom() {
     abi: VAULT_ABI,
     functionName: "getMatch",
     args: matchId ? [matchId] : undefined,
-    query: { enabled: Boolean(matchId), refetchInterval: 3000 },
+    query: {
+      enabled: Boolean(matchId),
+      // Poll fast (1.2s) while a match is Open/Funded so the payout shows up
+      // quickly once the resolver settles; idle slower otherwise.
+      refetchInterval: (q) => {
+        const data = q.state.data as readonly unknown[] | undefined;
+        const s = Number((data?.[4] as number | undefined) ?? 0);
+        return s === 1 || s === 2 ? 1200 : 4000;
+      },
+    },
   });
   const { writeContractAsync, isPending: writePending } = useWriteContract();
   const [wager, setWager] = useState("0.1");
