@@ -1,0 +1,27 @@
+services:
+  monad-app:
+    build:
+      context: .
+      args:
+        # Compose reads this from the .env file in this directory at build time
+        # and bakes it into the browser bundle. Falls back to the public RPC.
+        NEXT_PUBLIC_MONAD_RPC_URL: ${NEXT_PUBLIC_MONAD_RPC_URL:-https://testnet-rpc.monad.xyz}
+    image: monad-app
+    container_name: monad-app
+    restart: always
+    # Also expose the vars to the running process (server.mjs additionally reads
+    # the .env FILE mounted below for PRIVATE_KEY / MONAD_RPC_URL).
+    env_file: .env
+    volumes:
+      - ./.env:/app/.env:ro
+    # No host port published — nginx-proxy reaches it over the shared network.
+    expose:
+      - "3000"
+    networks:
+      - proxy
+
+networks:
+  # The network created by your nginx-proxy compose. Must already exist.
+  proxy:
+    name: proxy
+    external: true

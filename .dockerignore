@@ -1,0 +1,10 @@
+# Keep the build context small and secrets out of the image.
+node_modules
+.next
+.git
+.env*
+hardhat
+*.log
+.DS_Store
+deploy
+DEPLOY.md
