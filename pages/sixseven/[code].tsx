@@ -3,6 +3,14 @@ import Link from "next/link";
 import { useRouter } from "next/router";
 import { useCallback, useEffect, useRef, useState } from "react";
 import QRCode from "qrcode";
+import { formatEther, parseEther } from "viem";
+import {
+  useAccount,
+  useReadContract,
+  useWaitForTransactionReceipt,
+  useWriteContract,
+} from "wagmi";
+import { VAULT_ABI, VAULT_ADDRESS, matchIdFromCode } from "@/lib/contracts";
 
 type LandmarkPoint = { x: number; y: number; z: number };
 type DetectionResult = { landmarks: LandmarkPoint[][] };
@@ -145,6 +153,42 @@ export default function SixSevenRoom() {
   const [inviteUrl, setInviteUrl] = useState("");
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [copyState, setCopyState] = useState<"idle" | "copied">("idle");
+
+  // ---- On-chain wager (vault escrow) ----
+  const { isConnected } = useAccount();
+  const matchId = code ? matchIdFromCode(code) : undefined;
+  const { data: matchRaw, refetch: refetchMatch } = useReadContract({
+    address: VAULT_ADDRESS,
+    abi: VAULT_ABI,
+    functionName: "getMatch",
+    args: matchId ? [matchId] : undefined,
+    query: { enabled: Boolean(matchId), refetchInterval: 3000 },
+  });
+  const { writeContractAsync, isPending: writePending } = useWriteContract();
+  const [wager, setWager] = useState("0.1");
+  const [pendingTx, setPendingTx] = useState<`0x${string}` | undefined>(undefined);
+  const { isLoading: txMining, isSuccess: txDone } = useWaitForTransactionReceipt({
+    hash: pendingTx,
+    query: { enabled: Boolean(pendingTx) },
+  });
+
+  useEffect(() => {
+    if (txDone) {
+      refetchMatch();
+      setPendingTx(undefined);
+    }
+  }, [txDone, refetchMatch]);
+
+  const match = matchRaw as
+    | readonly [`0x${string}`, `0x${string}`, bigint, bigint, number]
+    | undefined;
+  const matchStatus = Number(match?.[4] ?? 0); // 0 None 1 Open 2 Funded 3 Resolved 4 Cancelled
+  const hostStake = match?.[2] ?? 0n;
+  const guestStake = match?.[3] ?? 0n;
+  const pot = hostStake + guestStake;
+  const bothFunded = matchStatus === 2;
+  const iStaked = role === "host" ? matchStatus >= 1 : matchStatus >= 2;
+  const txBusy = writePending || txMining;
 
   useEffect(() => {
     runningRef.current = server?.status === "running";
@@ -361,6 +405,44 @@ export default function SixSevenRoom() {
     };
   }, [ready]);
 
+  const lockWager = async () => {
+    if (!matchId || !isConnected || !role) return;
+    let value: bigint;
+    try {
+      value = parseEther(wager || "0");
+    } catch {
+      return;
+    }
+    if (value <= 0n) return;
+    try {
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: role === "host" ? "createMatch" : "joinMatch",
+        args: [matchId],
+        value,
+      });
+      setPendingTx(hash);
+    } catch {
+      /* user rejected or tx reverted */
+    }
+  };
+
+  const cancelWager = async () => {
+    if (!matchId) return;
+    try {
+      const hash = await writeContractAsync({
+        address: VAULT_ADDRESS,
+        abi: VAULT_ABI,
+        functionName: "cancel",
+        args: [matchId],
+      });
+      setPendingTx(hash);
+    } catch {
+      /* ignore */
+    }
+  };
+
   const sendStart = () => {
     if (wsRef.current?.readyState !== 1) return;
     wsRef.current.send(JSON.stringify({ type: "start" }));
@@ -427,7 +509,7 @@ export default function SixSevenRoom() {
   return (
     <>
       <Head>
-        <title>{`six seven · ${code}`}</title>
+        <title>{`What's 67? · ${code}`}</title>
         <meta name="viewport" content="width=device-width, initial-scale=1" />
       </Head>
       <div className="min-h-screen bg-zinc-950 text-zinc-100 p-4 sm:p-6">
@@ -440,7 +522,7 @@ export default function SixSevenRoom() {
               <div>
                 <h1 className="text-2xl sm:text-3xl font-bold tracking-tight">
                   <span className="bg-gradient-to-r from-cyan-400 to-fuchsia-400 bg-clip-text text-transparent">
-                    six seven
+                    What&apos;s 67?
                   </span>
                 </h1>
                 <div className="text-xs uppercase tracking-widest text-zinc-500 flex items-center gap-2 mt-0.5">
@@ -475,7 +557,8 @@ export default function SixSevenRoom() {
               {role === "host" && gameStatus !== "running" && (
                 <button
                   onClick={sendStart}
-                  disabled={!opponentReady || !ready || conn !== "online"}
+                  disabled={!opponentReady || !ready || conn !== "online" || !bothFunded}
+                  title={!bothFunded ? "Both players must lock a wager first" : undefined}
                   className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-bold text-black"
                 >
                   {gameStatus === "finished" ? "Play again" : "Start"}
@@ -509,6 +592,83 @@ export default function SixSevenRoom() {
             </div>
           </div>
 
+          {matchStatus !== 3 && gameStatus !== "running" && (
+            <div className="mb-5 p-4 bg-zinc-900/60 border border-zinc-800 rounded-xl">
+              <div className="flex items-center justify-between mb-3">
+                <div className="text-xs uppercase tracking-widest text-zinc-400">
+                  Wager · winner takes all
+                </div>
+                {bothFunded && (
+                  <div className="text-emerald-400 text-sm font-bold font-mono">
+                    Pot {formatEther(pot)} MON
+                  </div>
+                )}
+              </div>
+
+              {!isConnected ? (
+                <div className="text-sm text-zinc-400">
+                  Connect your wallet to place a wager.
+                </div>
+              ) : !iStaked ? (
+                role === "guest" && matchStatus === 0 ? (
+                  <div className="text-sm text-zinc-400">
+                    Waiting for the host to set the stake…
+                  </div>
+                ) : (
+                  <div className="flex gap-2 items-center">
+                    <div className="relative flex-1">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.01"
+                        value={wager}
+                        onChange={(e) => setWager(e.target.value)}
+                        className="w-full px-4 py-3 bg-zinc-950 border border-zinc-700 rounded-lg font-mono text-lg pr-16 focus:outline-none focus:border-violet-500"
+                      />
+                      <span className="absolute right-4 top-1/2 -translate-y-1/2 text-zinc-500 text-sm font-mono">
+                        MON
+                      </span>
+                    </div>
+                    <button
+                      onClick={lockWager}
+                      disabled={txBusy}
+                      className="px-5 py-3 bg-violet-500 hover:bg-violet-400 disabled:opacity-40 disabled:cursor-not-allowed rounded-lg font-bold text-black whitespace-nowrap"
+                    >
+                      {txBusy
+                        ? "Locking…"
+                        : role === "host"
+                          ? "Stake & host"
+                          : "Stake & join"}
+                    </button>
+                  </div>
+                )
+              ) : !bothFunded ? (
+                <div className="text-sm text-zinc-300">
+                  You staked{" "}
+                  <span className="font-mono text-white">
+                    {formatEther(role === "host" ? hostStake : guestStake)} MON
+                  </span>
+                  . Waiting for your opponent to match…
+                  {role === "host" && matchStatus === 1 && (
+                    <button
+                      onClick={cancelWager}
+                      disabled={txBusy}
+                      className="ml-3 text-zinc-400 underline hover:text-zinc-200 disabled:opacity-40"
+                    >
+                      cancel &amp; refund
+                    </button>
+                  )}
+                </div>
+              ) : (
+                <div className="text-sm text-zinc-300">
+                  Both wagers locked —{" "}
+                  <span className="font-mono text-white">{formatEther(pot)} MON</span>{" "}
+                  pot. {role === "host" ? "Hit Start when you're ready." : "Waiting for host to start."}
+                </div>
+              )}
+            </div>
+          )}
+
           {fatalError && (
             <div className="mb-4 p-4 bg-red-950/40 border border-red-900 rounded-lg text-sm">
               {fatalError}
@@ -536,6 +696,27 @@ export default function SixSevenRoom() {
               <div className="mt-2 text-zinc-300 font-mono">
                 {myScore} – {oppScore}
               </div>
+              {pot > 0n && (
+                <div className="mt-3 text-sm">
+                  {matchStatus === 3 ? (
+                    tied ? (
+                      <span className="text-emerald-300">Tie — stakes refunded on-chain.</span>
+                    ) : (
+                      <span className="text-emerald-300">
+                        Pot {formatEther(pot)} MON paid out · Six Seven Master minted to the winner 🏆
+                      </span>
+                    )
+                  ) : (
+                    <span className="text-amber-200">Settling on-chain…</span>
+                  )}
+                </div>
+              )}
+              <Link
+                href="/sixseven"
+                className="inline-block mt-4 px-4 py-2 bg-zinc-800 hover:bg-zinc-700 rounded-lg text-sm font-bold"
+              >
+                New match
+              </Link>
             </div>
           )}
 

@@ -11,9 +11,41 @@ export type Game = {
   accent: string;
   players: string;
   inventory: string[];
+  /** Set on playable titles — the route launched by the Play button. */
+  route?: string;
 };
 
 export const games: Game[] = [
+  {
+    id: "whats-67",
+    name: "What's 67?",
+    category: "Multiplayer Party",
+    studio: "Monad Arcade",
+    tagline: "Two players, one camera each. Do the 6-7 seesaw fastest in 20 seconds.",
+    cover:
+      "url('/covers/whats-67.jpg'), radial-gradient(135% 120% at 50% 8%, rgba(192,132,252,0.5) 0%, rgba(34,211,238,0.14) 42%, transparent 64%), linear-gradient(160deg, #0b0816 0%, #2a1a55 38%, #5b3aa6 68%, #0a0812 100%)",
+    thumbnail:
+      "url('/thumbs/whats-67.jpg'), radial-gradient(120% 95% at 50% 16%, rgba(192,132,252,0.6) 0%, transparent 56%), linear-gradient(150deg, #2a1a55 0%, #6d3ab0 70%, #0a0812 100%)",
+    accent: "#c084fc",
+    players: "67",
+    inventory: ["67 Badge", "Combo Trail", "Winner Crown"],
+    route: "/sixseven",
+  },
+  {
+    id: "bark-battle",
+    name: "Bark Battle",
+    category: "Multiplayer Party",
+    studio: "Monad Arcade",
+    tagline: "Two players, 20 seconds, loudest barks win. Stake MON — winner takes the pot.",
+    cover:
+      "url('/covers/bark-battle.jpg'), radial-gradient(135% 120% at 50% 8%, rgba(251,191,36,0.5) 0%, rgba(249,115,22,0.14) 42%, transparent 64%), linear-gradient(160deg, #1a1206 0%, #5a3410 38%, #b45309 68%, #120a04 100%)",
+    thumbnail:
+      "url('/thumbs/bark-battle.jpg'), radial-gradient(120% 95% at 50% 16%, rgba(251,191,36,0.6) 0%, transparent 56%), linear-gradient(150deg, #5a3410 0%, #b45309 70%, #120a04 100%)",
+    accent: "#fbbf24",
+    players: "20",
+    inventory: ["Golden Collar", "Loud Trophy", "Top Dog Tag"],
+    route: "/bark",
+  },
   {
     id: "skyward-realms",
     name: "Skyward Realms",
@@ -21,9 +53,9 @@ export const games: Game[] = [
     studio: "Monad Studios",
     tagline: "Chart the floating isles, claim the skies, and trade relics fully on-chain.",
     cover:
-      "radial-gradient(135% 120% at 78% 8%, rgba(120,224,255,0.5) 0%, rgba(43,110,255,0.12) 38%, transparent 64%), linear-gradient(157deg, #050d1b 0%, #0d2440 34%, #1a5c84 66%, #060f1a 100%)",
+      "url('/covers/skyward-realms.jpg'), radial-gradient(135% 120% at 78% 8%, rgba(120,224,255,0.5) 0%, rgba(43,110,255,0.12) 38%, transparent 64%), linear-gradient(157deg, #050d1b 0%, #0d2440 34%, #1a5c84 66%, #060f1a 100%)",
     thumbnail:
-      "radial-gradient(120% 95% at 76% 16%, rgba(120,224,255,0.6) 0%, transparent 56%), linear-gradient(150deg, #0a1c33 0%, #16517a 62%, #081320 100%)",
+      "url('/thumbs/skyward-realms.jpg'), radial-gradient(120% 95% at 76% 16%, rgba(120,224,255,0.6) 0%, transparent 56%), linear-gradient(150deg, #0a1c33 0%, #16517a 62%, #081320 100%)",
     accent: "#35d4ff",
     players: "18.2k",
     inventory: ["Glider Skin", "Cliff Token", "Rare Map"],
@@ -35,9 +67,9 @@ export const games: Game[] = [
     studio: "Turbo Monad",
     tagline: "Burn through dimensional circuits and mint every podium finish.",
     cover:
-      "radial-gradient(135% 120% at 22% 12%, rgba(255,186,96,0.46) 0%, rgba(255,82,60,0.14) 40%, transparent 66%), linear-gradient(152deg, #150a10 0%, #46131f 32%, #c2472b 66%, #110a0d 100%)",
+      "url('/covers/rift-racers.jpg'), radial-gradient(135% 120% at 22% 12%, rgba(255,186,96,0.46) 0%, rgba(255,82,60,0.14) 40%, transparent 66%), linear-gradient(152deg, #150a10 0%, #46131f 32%, #c2472b 66%, #110a0d 100%)",
     thumbnail:
-      "radial-gradient(120% 95% at 24% 18%, rgba(255,196,110,0.62) 0%, transparent 56%), linear-gradient(150deg, #2a0e16 0%, #c2472b 70%, #160a0d 100%)",
+      "url('/thumbs/rift-racers.jpg'), radial-gradient(120% 95% at 24% 18%, rgba(255,196,110,0.62) 0%, transparent 56%), linear-gradient(150deg, #2a0e16 0%, #c2472b 70%, #160a0d 100%)",
     accent: "#ff7a4d",
     players: "9.8k",
     inventory: ["Nitro Pack", "Monad Kart", "Track Pass"],
@@ -49,9 +81,9 @@ export const games: Game[] = [
     studio: "Hashlight",
     tagline: "Forge guilds, raid dungeons, and own every drop you earn.",
     cover:
-      "radial-gradient(135% 120% at 76% 12%, rgba(120,245,184,0.44) 0%, rgba(20,120,90,0.12) 40%, transparent 64%), linear-gradient(157deg, #03110d 0%, #0a3a2c 36%, #11785a 66%, #05130f 100%)",
+      "url('/covers/chain-quest.jpg'), radial-gradient(135% 120% at 76% 12%, rgba(120,245,184,0.44) 0%, rgba(20,120,90,0.12) 40%, transparent 64%), linear-gradient(157deg, #03110d 0%, #0a3a2c 36%, #11785a 66%, #05130f 100%)",
     thumbnail:
-      "radial-gradient(120% 95% at 74% 16%, rgba(120,245,184,0.58) 0%, transparent 56%), linear-gradient(150deg, #08261d 0%, #11785a 64%, #06140f 100%)",
+      "url('/thumbs/chain-quest.jpg'), radial-gradient(120% 95% at 74% 16%, rgba(120,245,184,0.58) 0%, transparent 56%), linear-gradient(150deg, #08261d 0%, #11785a 64%, #06140f 100%)",
     accent: "#35e0a1",
     players: "6.1k",
     inventory: ["Chainblade", "Forest Rune", "Guild Badge"],
@@ -63,40 +95,12 @@ export const games: Game[] = [
     studio: "Zero Labs",
     tagline: "Five-on-five tactical combat with provably fair ranked ladders.",
     cover:
-      "radial-gradient(135% 120% at 72% 10%, rgba(255,156,86,0.42) 0%, rgba(120,60,30,0.12) 40%, transparent 62%), linear-gradient(157deg, #090b11 0%, #1d2433 34%, #7a3a1e 64%, #090a0f 100%)",
+      "url('/covers/arena-zero.jpg'), radial-gradient(135% 120% at 72% 10%, rgba(255,156,86,0.42) 0%, rgba(120,60,30,0.12) 40%, transparent 62%), linear-gradient(157deg, #090b11 0%, #1d2433 34%, #7a3a1e 64%, #090a0f 100%)",
     thumbnail:
-      "radial-gradient(120% 95% at 74% 16%, rgba(255,166,96,0.5) 0%, transparent 56%), linear-gradient(150deg, #141a26 0%, #7a3a1e 70%, #090a0f 100%)",
+      "url('/thumbs/arena-zero.jpg'), radial-gradient(120% 95% at 74% 16%, rgba(255,166,96,0.5) 0%, transparent 56%), linear-gradient(150deg, #141a26 0%, #7a3a1e 70%, #090a0f 100%)",
     accent: "#f97316",
     players: "12.4k",
     inventory: ["Arena Pass", "Pulse Rifle", "Victory Emote"],
-  },
-  {
-    id: "neon-blocks",
-    name: "Neon Blocks",
-    category: "Puzzle",
-    studio: "Circuit House",
-    tagline: "Stack, clear, and climb the global ladder one neon line at a time.",
-    cover:
-      "radial-gradient(135% 120% at 50% 8%, rgba(110,235,255,0.4) 0%, rgba(80,70,230,0.14) 42%, transparent 64%), linear-gradient(160deg, #07091a 0%, #221a55 38%, #1d7d96 70%, #060812 100%)",
-    thumbnail:
-      "radial-gradient(120% 95% at 50% 14%, rgba(120,235,255,0.55) 0%, transparent 58%), linear-gradient(155deg, #161148 0%, #1d7d96 72%, #060812 100%)",
-    accent: "#22d3ee",
-    players: "4.7k",
-    inventory: ["Prism Block", "Hint Ticket", "Builder Trail"],
-  },
-  {
-    id: "faucet-frenzy",
-    name: "Faucet Frenzy",
-    category: "Party",
-    studio: "Tap Tap",
-    tagline: "Chaotic mini-game nights with friends and shareable on-chain trophies.",
-    cover:
-      "radial-gradient(135% 120% at 28% 12%, rgba(255,228,96,0.48) 0%, rgba(255,164,44,0.14) 40%, transparent 64%), linear-gradient(152deg, #131109 0%, #3a3410 32%, #14887a 66%, #091311 100%)",
-    thumbnail:
-      "radial-gradient(120% 95% at 26% 16%, rgba(255,228,110,0.6) 0%, transparent 56%), linear-gradient(150deg, #3a3410 0%, #14887a 72%, #091311 100%)",
-    accent: "#fcd34d",
-    players: "2.9k",
-    inventory: ["Drop Ticket", "Party Hat", "Boost Token"],
   },
 ];
 
