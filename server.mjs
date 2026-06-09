@@ -1,7 +1,17 @@
 import { createServer } from "node:http";
+import { readFileSync } from "node:fs";
 import { parse } from "node:url";
 import next from "next";
 import { WebSocketServer } from "ws";
+import {
+  createPublicClient,
+  createWalletClient,
+  defineChain,
+  http,
+  keccak256,
+  toBytes,
+} from "viem";
+import { privateKeyToAccount } from "viem/accounts";
 
 const dev = process.env.NODE_ENV !== "production";
 const hostname = process.env.HOSTNAME || "0.0.0.0";
@@ -16,6 +26,64 @@ const SLOT_GRACE_MS = 5000;
 const ROOM_GRACE_MS = 15000;
 
 const rooms = new Map();
+
+// ---- On-chain settlement (vault payout + trophy mint) ----
+let vaultCfg = null;
+let publicClient = null;
+let walletClient = null;
+
+try {
+  const here = new URL("./", import.meta.url);
+  const deployments = JSON.parse(
+    readFileSync(new URL("deployments/contracts.json", here), "utf8"),
+  );
+  const env = readFileSync(new URL(".env", here), "utf8");
+  let pk = env.match(/^PRIVATE_KEY=(.+)$/m)?.[1]?.trim();
+  if (pk && !pk.startsWith("0x")) pk = `0x${pk}`;
+  if (!pk) throw new Error("PRIVATE_KEY missing");
+
+  const chain = defineChain({
+    id: deployments.chainId,
+    name: "Monad Testnet",
+    nativeCurrency: { decimals: 18, name: "Monad", symbol: "MON" },
+    rpcUrls: { default: { http: ["https://testnet-rpc.monad.xyz"] } },
+  });
+  const account = privateKeyToAccount(pk);
+  publicClient = createPublicClient({ chain, transport: http() });
+  walletClient = createWalletClient({ account, chain, transport: http() });
+  vaultCfg = { address: deployments.vault, abi: deployments.vaultAbi };
+  console.log("> On-chain resolver ready:", account.address);
+} catch (e) {
+  console.warn("> On-chain resolver disabled:", e.message);
+}
+
+async function resolveOnChain(room) {
+  if (!walletClient || !vaultCfg || room.resolving || room.resolved) return;
+  room.resolving = true;
+  try {
+    const matchId = keccak256(toBytes(room.code.toUpperCase()));
+    const m = await publicClient.readContract({
+      ...vaultCfg,
+      functionName: "getMatch",
+      args: [matchId],
+    });
+    const status = Number(m[4]);
+    if (status !== 2) return; // not funded (free play) → nothing to settle
+    // winner: 0 = host, 1 = guest, null = tie → 2 (refund both)
+    const winnerRole = room.state.winner === null ? 2 : room.state.winner;
+    const hash = await walletClient.writeContract({
+      ...vaultCfg,
+      functionName: "resolve",
+      args: [matchId, winnerRole],
+    });
+    room.resolved = true;
+    console.log(`> [${room.code}] settled role=${winnerRole} tx=${hash}`);
+  } catch (e) {
+    console.error(`> [${room.code}] settle failed:`, e.shortMessage || e.message);
+  } finally {
+    room.resolving = false;
+  }
+}
 
 function newRoom(code) {
   return {
@@ -119,6 +187,7 @@ function startTicker(room) {
       room.state.timeLeft = 0;
       clearInterval(room.tickInterval);
       room.tickInterval = null;
+      resolveOnChain(room); // fire-and-forget payout + trophy
     }
     broadcast(room);
   }, 1000);
@@ -202,6 +271,7 @@ wss.on("connection", (ws, req) => {
       room.state.winner = null;
       room.state.endTime = Date.now() + DURATION_SEC * 1000;
       room.state.timeLeft = DURATION_SEC;
+      room.resolved = false;
       startTicker(room);
       broadcast(room);
       return;
