@@ -20,7 +20,7 @@ const navItems: Array<{ id: PortalSection; label: string; href: string }> = [
   { id: "inventories", label: "Inventory", href: "/inventories" },
   { id: "library", label: "Library", href: "/" },
   { id: "friends", label: "Friends", href: "/friends" },
-  { id: "power", label: "Power", href: "/power" },
+  { id: "power", label: "Host", href: "/power" },
 ];
 
 function NavIcon({ type }: { type: PortalSection }) {
@@ -70,20 +70,35 @@ function NavIcon({ type }: { type: PortalSection }) {
     case "power":
       return (
         <svg {...common} aria-hidden="true">
-          <path d="M12 3.5v7" />
-          <path d="M6.8 7.2a7 7 0 1 0 10.4 0" />
+          <path d="M12 2.5c2.5 2.5 3 6.5 2 10.5l-2 1.5-2-1.5c-1-4-.5-8 2-10.5Z" />
+          <circle cx="12" cy="8" r="1.6" />
+          <path d="M10 13.5 7.5 15.5l1.8-.4M14 13.5l2.5 2-1.8-.4" />
+          <path d="M10.8 14.6c.2 1.8 1.2 3.4 1.2 3.4s1-1.6 1.2-3.4" />
         </svg>
       );
   }
 }
 
 export function PortalShell({ active, cover, accent, children }: PortalShellProps) {
+  // The immersive cover art is reserved for the Library. Every other section
+  // uses a calm, solid backdrop so the content reads cleanly.
+  const showArt = active === "library";
+
   return (
-    <main className="portal" style={{ "--cover": cover, "--accent": accent } as ShellStyle}>
-      <div className="backgroundArt" aria-hidden="true" />
-      <div className="accentGlow" aria-hidden="true" />
-      <div className="screenShade" aria-hidden="true" />
-      <div className="grain" aria-hidden="true" />
+    <main
+      className={`portal ${showArt ? "withArt" : "plain"}`}
+      style={{ "--cover": cover, "--accent": accent } as ShellStyle}
+    >
+      {showArt ? (
+        <>
+          <div className="backgroundArt" aria-hidden="true" />
+          <div className="accentGlow" aria-hidden="true" />
+          <div className="screenShade" aria-hidden="true" />
+          <div className="grain" aria-hidden="true" />
+        </>
+      ) : (
+        <div className="plainGlow" aria-hidden="true" />
+      )}
 
       <header className="topBar">
         <MonadWalletButton />
@@ -119,6 +134,25 @@ export function PortalShell({ active, cover, accent, children }: PortalShellProp
           padding: clamp(16px, 2.4vw, 30px) clamp(20px, 4vw, 52px)
             clamp(16px, 2.4vw, 30px);
           font-family: var(--font-sans);
+        }
+
+        .portal.plain {
+          background:
+            radial-gradient(120% 80% at 50% -10%, #14131c 0%, transparent 60%),
+            var(--bg);
+        }
+
+        /* A faint accent wash up top keeps non-Library pages from feeling flat
+           without the heavy cover art. */
+        .plainGlow {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(
+            70% 50% at 84% 0%,
+            color-mix(in srgb, var(--accent), transparent 86%) 0%,
+            transparent 60%
+          );
+          pointer-events: none;
         }
 
         .backgroundArt {

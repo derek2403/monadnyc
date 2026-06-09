@@ -63,11 +63,19 @@ async function main() {
   const barkVault = await Vault.deploy(hre.ethers.ZeroAddress);
   await barkVault.waitForDeployment();
   const barkVaultAddress = await barkVault.getAddress();
-  console.log("BarkVault:     ", barkVaultAddress, "(no NFT)\n");
+  console.log("BarkVault:     ", barkVaultAddress, "(no NFT)");
+
+  // 5. Game launchpad (ERC-20 factory + on-chain registry)
+  const Launchpad = await hre.ethers.getContractFactory("GameLaunchpad");
+  const launchpad = await Launchpad.deploy();
+  await launchpad.waitForDeployment();
+  const launchpadAddress = await launchpad.getAddress();
+  console.log("GameLaunchpad: ", launchpadAddress, "\n");
 
   // Write config for the app + server
   const nftAbi = (await hre.artifacts.readArtifact("SixSevenMaster")).abi;
   const vaultAbi = (await hre.artifacts.readArtifact("SixSevenVault")).abi;
+  const launchpadAbi = (await hre.artifacts.readArtifact("GameLaunchpad")).abi;
   const chainId = Number(net.chainId);
 
   const root = path.resolve(__dirname, "..", "..");
@@ -77,9 +85,11 @@ async function main() {
     nft: nftAddress,
     vault: vaultAddress,
     barkVault: barkVaultAddress,
+    launchpad: launchpadAddress,
     deployer: deployer.address,
     nftAbi,
     vaultAbi,
+    launchpadAbi,
   };
   fs.mkdirSync(path.join(root, "deployments"), { recursive: true });
   fs.writeFileSync(
@@ -95,6 +105,7 @@ export const MONAD_CHAIN_ID = ${chainId};
 export const NFT_ADDRESS = "${nftAddress}" as const;
 export const VAULT_ADDRESS = "${vaultAddress}" as const;
 export const BARK_VAULT_ADDRESS = "${barkVaultAddress}" as const;
+export const LAUNCHPAD_ADDRESS = "${launchpadAddress}" as const;
 
 /** Match id derived from a room code, shared by client and server. */
 export const matchIdFromCode = (code: string) =>
@@ -102,6 +113,7 @@ export const matchIdFromCode = (code: string) =>
 
 export const VAULT_ABI = ${JSON.stringify(vaultAbi)} as const;
 export const NFT_ABI = ${JSON.stringify(nftAbi)} as const;
+export const LAUNCHPAD_ABI = ${JSON.stringify(launchpadAbi)} as const;
 `;
   fs.mkdirSync(path.join(root, "lib"), { recursive: true });
   fs.writeFileSync(path.join(root, "lib", "contracts.ts"), ts);
