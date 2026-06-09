@@ -14,8 +14,13 @@ services:
     env_file: .env
     volumes:
       - ./.env:/app/.env:ro
-    # Cloudflare Tunnel (cloudflared on this host) reaches the app here. Bound to
-    # localhost so the port is never exposed on the LAN/public — only the tunnel
-    # can reach it. 3000 is taken by gym and 8080 by code, so we use 8090.
-    ports:
-      - "127.0.0.1:8090:3000"
+    # No host port — nginx-proxy reaches it by name (monad-app:3000) over the
+    # shared 'proxy' network, exactly like enclave-ui / gym-app.
+    networks:
+      - proxy
+
+networks:
+  # The network created by your nginx-proxy compose. Must already exist.
+  proxy:
+    name: proxy
+    external: true
