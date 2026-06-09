@@ -36,7 +36,7 @@ const BARK_FX_MS = 320;
 const BARK_BOUNCE_MS = 280;
 const BARK_LINGER_MS = 750; // how long the mad face stays after the last bark
 const POP_LIFE_MS = 1100;
-const POP_MAX = 30;
+const POP_MAX = 80;
 const MAX_RECONNECT_ATTEMPTS = 12;
 
 const BARK_WORDS = [
@@ -70,15 +70,15 @@ function spawnPops(
 ): Pop[] {
   return Array.from({ length: count }, () => {
     const angle = Math.random() * 360; // full circle — osu-style burst
-    const distance = 90 + Math.random() * 140;
+    const distance = 180 + Math.random() * 280; // fly far, 180–460px
     const rad = (angle * Math.PI) / 180;
+    void side;
     return {
       id: ++popIdCounter,
       word: BARK_WORDS[Math.floor(Math.random() * BARK_WORDS.length)],
-      // bias outward, away from the screen edge the dog sits on
-      dx: Math.cos(rad) * distance + (side === "left" ? 24 : -24),
-      dy: Math.sin(rad) * distance - 30,
-      rot: -35 + Math.random() * 70,
+      dx: Math.cos(rad) * distance,
+      dy: Math.sin(rad) * distance,
+      rot: -45 + Math.random() * 90,
       scale: 0.8 + Math.random() * 0.7,
       color,
     };
@@ -99,6 +99,45 @@ function getClientId(): string {
     sessionStorage.setItem(key, id);
   }
   return id;
+}
+
+function BarkPop({ pop }: { pop: Pop }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || typeof el.animate !== "function") return;
+    const anim = el.animate(
+      [
+        { opacity: 0, transform: `translate(-50%, -50%) scale(${pop.scale * 0.3})` },
+        {
+          opacity: 1,
+          transform: `translate(-50%, -50%) scale(${pop.scale * 1.25})`,
+          offset: 0.25,
+        },
+        {
+          opacity: 0,
+          transform: `translate(calc(-50% + ${pop.dx}px), calc(-50% + ${pop.dy}px)) scale(${pop.scale}) rotate(${pop.rot}deg)`,
+        },
+      ],
+      {
+        duration: POP_LIFE_MS,
+        easing: "cubic-bezier(0.2, 0.7, 0.3, 1)",
+        fill: "forwards",
+      },
+    );
+    return () => anim.cancel();
+  }, [pop]);
+
+  return (
+    <span
+      ref={ref}
+      className={`pointer-events-none absolute left-1/2 top-[15%] z-20 inline-block px-3 py-0.5 font-black text-amber-950 text-xl sm:text-3xl rounded-full border-[3px] border-amber-900 whitespace-nowrap shadow-lg ${
+        pop.color === "yellow" ? "bg-yellow-200" : "bg-orange-200"
+      }`}
+    >
+      {pop.word}
+    </span>
+  );
 }
 
 export default function BarkRoom() {
@@ -388,7 +427,7 @@ export default function BarkRoom() {
       void el.offsetWidth; // force reflow so the animation replays each bark
       el.style.animation = `dog-bark ${BARK_BOUNCE_MS}ms ease-out`;
     }
-    const fresh = spawnPops("left", 3 + Math.floor(Math.random() * 3), "yellow");
+    const fresh = spawnPops("left", 7 + Math.floor(Math.random() * 5), "yellow");
     setMyPops((prev) => [...prev, ...fresh].slice(-POP_MAX));
     const t = setTimeout(() => {
       setMyPops((prev) => prev.filter((p) => !fresh.some((f) => f.id === p.id)));
@@ -404,7 +443,7 @@ export default function BarkRoom() {
       void el.offsetWidth; // force reflow so the animation replays each bark
       el.style.animation = `dog-bark ${BARK_BOUNCE_MS}ms ease-out`;
     }
-    const fresh = spawnPops("right", 3 + Math.floor(Math.random() * 3), "orange");
+    const fresh = spawnPops("right", 7 + Math.floor(Math.random() * 5), "orange");
     setOppPops((prev) => [...prev, ...fresh].slice(-POP_MAX));
     const t = setTimeout(() => {
       setOppPops((prev) => prev.filter((p) => !fresh.some((f) => f.id === p.id)));
@@ -674,20 +713,7 @@ export default function BarkRoom() {
           </div>
 
           {myPops.map((p) => (
-            <span
-              key={p.id}
-              className={`bark-pop pointer-events-none absolute left-1/2 top-[15%] z-20 inline-block px-3 py-0.5 font-black text-amber-950 text-xl sm:text-3xl rounded-full border-[3px] border-amber-900 whitespace-nowrap shadow-lg ${
-                p.color === "yellow" ? "bg-yellow-200" : "bg-orange-200"
-              }`}
-              style={{
-                ["--tx" as unknown as string]: `${p.dx}px`,
-                ["--ty" as unknown as string]: `${p.dy}px`,
-                ["--rot" as unknown as string]: `${p.rot}deg`,
-                ["--pop-scale" as unknown as string]: p.scale,
-              }}
-            >
-              {p.word}
-            </span>
+            <BarkPop key={p.id} pop={p} />
           ))}
         </div>
 
@@ -729,20 +755,7 @@ export default function BarkRoom() {
           </div>
 
           {oppPops.map((p) => (
-            <span
-              key={p.id}
-              className={`bark-pop pointer-events-none absolute left-1/2 top-[15%] z-20 inline-block px-3 py-0.5 font-black text-amber-950 text-xl sm:text-3xl rounded-full border-[3px] border-amber-900 whitespace-nowrap shadow-lg ${
-                p.color === "yellow" ? "bg-yellow-200" : "bg-orange-200"
-              }`}
-              style={{
-                ["--tx" as unknown as string]: `${p.dx}px`,
-                ["--ty" as unknown as string]: `${p.dy}px`,
-                ["--rot" as unknown as string]: `${p.rot}deg`,
-                ["--pop-scale" as unknown as string]: p.scale,
-              }}
-            >
-              {p.word}
-            </span>
+            <BarkPop key={p.id} pop={p} />
           ))}
         </div>
 
@@ -931,24 +944,6 @@ export default function BarkRoom() {
         )}
 
         <style jsx global>{`
-          @keyframes bark-pop {
-            0% {
-              opacity: 0;
-              transform: translate(-50%, -50%) scale(calc(var(--pop-scale, 1) * 0.3)) rotate(0deg);
-            }
-            25% {
-              opacity: 1;
-              transform: translate(-50%, -50%) scale(calc(var(--pop-scale, 1) * 1.25)) rotate(0deg);
-            }
-            100% {
-              opacity: 0;
-              transform: translate(calc(-50% + var(--tx, 0px)), calc(-50% + var(--ty, 0px))) scale(calc(var(--pop-scale, 1) * 1)) rotate(var(--rot, 0deg));
-            }
-          }
-          .bark-pop {
-            transform-origin: center;
-            animation: bark-pop ${POP_LIFE_MS}ms cubic-bezier(0.2, 0.7, 0.3, 1) forwards;
-          }
           @keyframes dog-bark {
             0% {
               transform: scale(1);
